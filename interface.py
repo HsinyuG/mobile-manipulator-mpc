@@ -15,6 +15,7 @@ class Interface:
         self.x_target = x_target
         self.x_start = x_start
         self.controller = controller
+        self.physical_sim = physical_sim
 
         self.x_log = []
         self.u_log = []
@@ -34,11 +35,15 @@ class Interface:
         '''
         self.current_state = self.x_start
         self.task_flag = 'in progress'
+        num_step = 0
         while(True):
+            num_step += 1
+            print(num_step, end=': ')
+            print(self.current_state)
             # step 1
-            if physical_sim is True: 
+            if self.physical_sim is True: 
                 self.observationCallback()
-            self.x_log = append(self.current_state)
+            self.x_log.append(self.current_state)
 
             # step 2
             self.checkFinish1D()
@@ -49,16 +54,15 @@ class Interface:
 
             # step 4
             self.command = self.controller.solve(self.current_state, self.local_traj_ref, self.local_u_ref)
-            self.u_log = appemd(self.command)
+            self.u_log.append(np.asarray(self.command))
 
             # step 5
-            if physical_sim is True: 
+            if self.physical_sim is True: 
                 self.actuate()
 
             # step 6
-            if physical_sim is False:
-                f = ca.Function('f', [x, u], [self.controller.f_dynamics])
-                self.current_state = f(self.current_state, self.command)
+            if self.physical_sim is False:
+                self.current_state = np.asarray(self.controller.f_dynamics(self.current_state, self.command)).squeeze()
 
     def globalPlan1D(self):
         '''
@@ -69,7 +73,7 @@ class Interface:
 
         # only give the positions, velocity references are not used thus will not be panalized
         self.traj_ref = np.array([
-            np.linspace(x_start[0], x_target[0], int(traj_length + 1)),
+            np.linspace(self.x_start[0], self.x_target[0], int(traj_length + 1)),
             np.zeros(int(traj_length + 1))
         ]).T
 
@@ -79,7 +83,8 @@ class Interface:
         '''
         check if we reach the goal
         '''
-        if abs(self.current_state[0] - self.traj_ref[-1, 0]) <= 0.5:
+        if (abs(self.current_state[0] - self.traj_ref[-1, 0]) <= 0.5) and \
+            (abs(self.current_state[1] - self.u_ref[-1, 0]) <= 1e-2):
             self.task_flag = 'finish'
 
     def calcLocalRef(self):
@@ -96,20 +101,25 @@ class Interface:
                 min_distance = distance
                 min_idx = i
 
-        terminal_index = min_idx+self.controller.N
-        if terminal_index < self.traj_ref.shape[0]:
+        terminal_index = min_idx + self.controller.N + 1   # reference (N+1) states and N inputs    
+        if terminal_index <= self.traj_ref.shape[0]:
             self.local_traj_ref = self.traj_ref[min_idx : terminal_index]
-            self.local_u_ref = self.u_ref[min_idx : terminal_index]
+            self.local_u_ref = self.u_ref[min_idx : terminal_index-1]
         else:
+            # print(self.local_traj_ref.shape)
+            # print(self.local_u_ref.shape)
+
             last_traj_ref = self.traj_ref[-1]
             last_u_ref = self.u_ref[-1]
-            repeat_times = terminal_index - self.traj_ref.shape[0] + 1
+            repeat_times = terminal_index - self.traj_ref.shape[0]
             self.local_traj_ref = np.vstack([self.traj_ref[min_idx :], np.tile(last_traj_ref, (repeat_times, 1))])
-            self.local_u_ref = p.vstack([self.u_ref[min_idx :], np.tile(last_u_ref, (repeat_times, 1))])
+            self.local_u_ref = np.vstack([self.u_ref[min_idx :], np.tile(last_u_ref, (repeat_times, 1))])
+
+            # print(self.local_traj_ref.shape)
+            # print(self.local_u_ref.shape)
         
-        assert local_traj_ref.shape[0] == local_u_ref.shape[0] == self.controller.N
-        self.x_log = np.asarray(self.x_log)
-        self.u_log = np.asarray(self.u_log)
+        assert self.local_traj_ref.shape[0] == self.controller.N + 1
+        assert self.local_u_ref.shape[0] == self.controller.N
 
     def observationCallback(self):
         '''
@@ -129,23 +139,33 @@ class Interface:
         pass
 
     def plot(self):
+        self.x_log = np.asarray(self.x_log)
+        self.u_log = np.asarray(self.u_log)
         # Plot the results
-        t = arange(len(self.x_log))
+        t = np.arange(len(self.x_log))
 
-        plt.subplot(311)
+        plt.subplot(411)
         plt.plot(t, self.x_log[:, 0])
+        plt.xlabel('Time Step')
+        plt.ylabel('p')
+        plt.grid()
 
-        plt.subplot(312)
-        plt.plot(t, self.u_log[:, 0])
+        plt.subplot(412)
+        plt.plot(t, self.x_log[:, 1])
+        plt.xlabel('Time Step')
+        plt.ylabel('v')
+        plt.grid()
 
-        plt.subplot(313)
-        plt.plot(t, self.traj_ref[:, 0])        
+        plt.subplot(413)
+        plt.plot(t[:-1], self.u_log[:, 0])
+        plt.xlabel('Time Step')
+        plt.ylabel('a')
+        plt.grid()
 
-        # time = [k for k in range(N + 1)]
-        # plt.plot(time, optimal_states[:, 0], label='Position')
-        # plt.plot(time[:-1], optimal_controls, label='Control')
-        # plt.plot(time, reference_trajectory_values[:, 0], '--', label='Reference Trajectory')
-        # plt.legend()
-        # plt.xlabel('Time Step')
-        # plt.ylabel('Position / Control')
-        # plt.show()
+        plt.subplot(414)
+        plt.plot(t[:self.traj_ref.shape[0]], self.traj_ref[:, 0])
+        plt.xlabel('Time Step')
+        plt.ylabel('a')
+        plt.grid()        
+
+        plt.show()

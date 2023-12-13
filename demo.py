@@ -9,8 +9,8 @@ from robot_models.robot_demo import Robot
 dt = 0.1
 N = 10
 t_total = 50
-x_start = np.array([0.])      # one dimension case
-x_target = np.array([50.]) 
+x_start = np.array([0., 0.])      # 1D position and velocity
+x_target = np.array([50., 0.]) 
 
 bot_demo = Robot(dt)
 mpc_demo = MPC(bot_demo, N=N)
