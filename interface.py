@@ -2,6 +2,7 @@ import casadi as ca
 import matplotlib.pyplot as plt
 import numpy as np
 import tqdm
+import math
 
 class Interface:
     def __init__(self, dt, t_total, x_start, x_target, controller, physical_sim=False):
@@ -20,7 +21,7 @@ class Interface:
         self.x_log = []
         self.u_log = []
 
-        self.globalPlan1D()
+        self.globalPlan2D()
 
     def run(self, ):
         '''
@@ -43,10 +44,11 @@ class Interface:
             # step 1
             if self.physical_sim is True: 
                 self.observationCallback()
+            # TODO: get current state from simulation
             self.x_log.append(self.current_state)
 
             # step 2
-            self.checkFinish1D()
+            self.checkFinish2D()
             if self.task_flag != 'in progress': break # can be calling another global planner
 
             # step 3
@@ -64,7 +66,7 @@ class Interface:
             if self.physical_sim is False:
                 self.current_state = np.asarray(self.controller.f_dynamics(self.current_state, self.command)).squeeze()
 
-    def globalPlan1D(self):
+    def globalPlan2D(self):
         '''
         TODO: 
         compute global reference trajectory 
@@ -72,19 +74,20 @@ class Interface:
         traj_length = int(self.desired_t_total/self.dt)
 
         # only give the positions, velocity references are not used thus will not be panalized
-        self.traj_ref = np.array([
-            np.linspace(self.x_start[0], self.x_target[0], int(traj_length + 1)),
-            np.zeros(int(traj_length + 1))
-        ]).T
+        self.traj_ref = np.array([np.linspace(self.x_start[0], self.x_target[0], int(traj_length + 1)),
+                                 np.linspace(self.x_start[1], self.x_target[1], int(traj_length + 1))]
+                                ).T
 
-        self.u_ref = np.zeros(traj_length).reshape(-1, 1)
+        self.u_ref = np.zeros((traj_length,2))
 
-    def checkFinish1D(self):
+    def checkFinish2D(self):
         '''
         check if we reach the goal
         '''
         if (abs(self.current_state[0] - self.traj_ref[-1, 0]) <= 0.5) and \
-            (abs(self.current_state[1] - self.u_ref[-1, 0]) <= 1e-2):
+            (abs(self.current_state[1] - self.traj_ref[-1, 1]) <= 0.5): 
+            # (abs(self.command[0,0] - self.u_ref[-1, 0]) <= 1e-2) and \
+            # (abs(self.command[0,1] - self.u_ref[-1, 1]) <= 1e-2)
             self.task_flag = 'finish'
 
     def calcLocalRef(self):
@@ -95,29 +98,31 @@ class Interface:
         '''
         min_distance = 1e5
         min_idx = -1e5
-        for i, x_ref in enumerate(self.traj_ref):
-            distance = abs(self.current_state[0] - x_ref[0])
+        # choose the cloest traj_ref to be reference point
+        for i, ref_point in enumerate(self.traj_ref):
+            # print('ref_point',ref_point)
+            distance = np.linalg.norm(self.current_state[:2] - ref_point)
             if distance < min_distance:
                 min_distance = distance
                 min_idx = i
 
         terminal_index = min_idx + self.controller.N + 1   # reference (N+1) states and N inputs    
         if terminal_index <= self.traj_ref.shape[0]:
-            self.local_traj_ref = self.traj_ref[min_idx : terminal_index]
-            self.local_u_ref = self.u_ref[min_idx : terminal_index-1]
+            self.local_traj_ref = self.traj_ref[min_idx : terminal_index,:]
+            self.local_u_ref = self.u_ref[min_idx : terminal_index-1,:] 
         else:
             # print(self.local_traj_ref.shape)
             # print(self.local_u_ref.shape)
 
-            last_traj_ref = self.traj_ref[-1]
-            last_u_ref = self.u_ref[-1]
+            last_traj_ref = self.traj_ref[-1,:]
+            # print(last_traj_ref)
+            last_u_ref = self.u_ref[-1,:]
             repeat_times = terminal_index - self.traj_ref.shape[0]
-            self.local_traj_ref = np.vstack([self.traj_ref[min_idx :], np.tile(last_traj_ref, (repeat_times, 1))])
-            self.local_u_ref = np.vstack([self.u_ref[min_idx :], np.tile(last_u_ref, (repeat_times, 1))])
+            self.local_traj_ref = np.vstack([self.traj_ref[min_idx :, :], np.tile(last_traj_ref, (repeat_times, 1))])
+            self.local_u_ref = np.vstack([self.u_ref[min_idx :, :], np.tile(last_u_ref, (repeat_times, 1))])
 
-            # print(self.local_traj_ref.shape)
-            # print(self.local_u_ref.shape)
-        
+        # print('local_traj_ref', self.local_traj_ref.shape)
+        # print('local_u_ref', self.local_u_ref.shape)
         assert self.local_traj_ref.shape[0] == self.controller.N + 1
         assert self.local_u_ref.shape[0] == self.controller.N
 
@@ -143,29 +148,46 @@ class Interface:
         self.u_log = np.asarray(self.u_log)
         # Plot the results
         t = np.arange(len(self.x_log))
-
-        plt.subplot(411)
+        plt.figure()
+        plt.subplot(311)
         plt.plot(t, self.x_log[:, 0])
         plt.xlabel('Time Step')
-        plt.ylabel('p')
+        plt.ylabel('x')
         plt.grid()
 
-        plt.subplot(412)
+        plt.subplot(312)
         plt.plot(t, self.x_log[:, 1])
         plt.xlabel('Time Step')
-        plt.ylabel('v')
+        plt.ylabel('y')
         plt.grid()
 
-        plt.subplot(413)
+        plt.subplot(313)
+        plt.plot(t, self.x_log[:, 3])
+        plt.xlabel('Time Step')
+        plt.ylabel('psi')
+        plt.grid()
+        
+        plt.figure()
+        plt.subplot(211)
         plt.plot(t[:-1], self.u_log[:, 0])
         plt.xlabel('Time Step')
-        plt.ylabel('a')
+        plt.ylabel('v_dot')
         plt.grid()
 
-        plt.subplot(414)
-        plt.plot(t[:self.traj_ref.shape[0]], self.traj_ref[:, 0])
+        plt.subplot(212)
+        plt.plot(t[:-1], self.u_log[:, 1])
         plt.xlabel('Time Step')
-        plt.ylabel('a')
-        plt.grid()        
-
+        plt.ylabel('w_dot')
+        plt.grid()
+        
+        plt.figure()
+        plt.plot(self.x_log[:, 0], self.x_log[:, 1],label = 'actual postion')
+        plt.plot(self.traj_ref[:, 0], self.traj_ref[:, 1],label = 'reference position')
+        circle = plt.Circle((25, 30), 4, color='green', fill=False)
+        plt.gca().add_artist(circle)
+        plt.gca().set_aspect('equal', adjustable='box')
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.legend()
+        plt.grid()
         plt.show()
