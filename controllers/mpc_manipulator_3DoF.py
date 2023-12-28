@@ -6,10 +6,10 @@ class MPCManipulator3DoF:
     def __init__(self,
         robot, 
         N = 10, 
-        Q = np.diag([1., 0., 1.]),  # x y z 
-        P = np.diag([1., 0., 1.]), 
+        Q = np.diag([5., 0., 5.]),  # x y z 
+        P = np.diag([5., 0., 5.]), 
         R = np.diag([0.1, 0.1, 0.1]), # dq1 dq2 dq3
-        qlim=(ca.horzcat(-ca.pi/2, -ca.pi, 0), ca.horzcat(ca.pi/2, 0, ca.pi*3/2)), 
+        qlim=(ca.horzcat(-ca.pi/2, -ca.pi*3/4, 0), ca.horzcat(ca.pi/2, 0, ca.pi*3/2)),  # TODO: check the boundary
         dqlim=(ca.horzcat(-1, -1, -1), ca.horzcat(1, 1, 1))): 
 
         self.Q = Q

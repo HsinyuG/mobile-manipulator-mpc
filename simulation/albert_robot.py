@@ -3,14 +3,22 @@ import numpy as np
 from urdfenvs.robots.generic_urdf.generic_diff_drive_robot import GenericDiffDriveRobot
 from urdfenvs.urdf_common.urdf_env import UrdfEnv
 
-from obstacles import (
+from simulation.obstacles import (
     movable_sphere1,
     static_box1,
     movable_box1,
     static_cylinder
 )
 
-def setup_environment(n_steps=1000, render=False, reconfigure_camera=False, goal=True, obstacles=True, mode='vel'):
+def setup_environment(
+        n_steps=1000, 
+        render=False, 
+        reconfigure_camera=False, 
+        goal=True, 
+        obstacles=True, 
+        mode='vel',
+        initial_state=None
+    ):
     robots = [
         GenericDiffDriveRobot(
             urdf="albert.urdf",
@@ -20,7 +28,7 @@ def setup_environment(n_steps=1000, render=False, reconfigure_camera=False, goal
             wheel_radius = 0.08,
             wheel_distance = 0.494,
             spawn_rotation = 0, # Change initial direction
-            facing_direction = '-y',
+            facing_direction = 'x',
         ),
     ]
     env: UrdfEnv = gym.make(
@@ -29,7 +37,7 @@ def setup_environment(n_steps=1000, render=False, reconfigure_camera=False, goal
     )
     
     ob = env.reset(
-        pos=np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5])
+        pos = initial_state # [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5]
     )
     print(f"Initial observation : {ob}")
 
@@ -42,7 +50,7 @@ def setup_environment(n_steps=1000, render=False, reconfigure_camera=False, goal
     if reconfigure_camera:
         env.reconfigure_camera(4.0, 0.0, -90.01, (0, -2.0, 0))
     
-    return env
+    return env, ob
 
 
 def run_step(env, action):
