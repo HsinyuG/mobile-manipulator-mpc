@@ -17,11 +17,11 @@ def modified_dh_to_matrix(theta, d, a, alpha):
     """
     return None
 
-def jacobian_from_classical_dh(dh_table, joint_angles):
+def jacobian_from_classical_dh(dh_table, rows_with_angle):
     """
     Compute the Jacobian matrix for a robotic manipulator given its DH table and joint angles.
     """
-    num_joints = len(joint_angles)
+    num_joints = len(rows_with_angle)
     jacobian = sp.zeros(6, num_joints)
 
     T = sp.eye(4)
@@ -29,14 +29,16 @@ def jacobian_from_classical_dh(dh_table, joint_angles):
     ts = []
     zs.append(T[:3, 2])
     ts.append(T[:3, 3])
-    print(0,", t: ", T[:3, 3], end=" ")
-    print("z: ", T[:3, 2])
-    print(T)
-    print()
+    # print(0,", t: ", T[:3, 3], end=" ")
+    # print("z: ", T[:3, 2])
+    # print(T)
+    # print()
+    Ts = [T]
 
     for i, (theta, d, a, alpha) in enumerate(dh_table):
         T_i = classical_dh_to_matrix(theta, d, a, alpha)
         T *= T_i
+        Ts.append(T)
 
         # Linear velocity component
         ts.append(T[:3, 3]) #.jacobian(joint_angles)
@@ -50,16 +52,16 @@ def jacobian_from_classical_dh(dh_table, joint_angles):
         # print(T)
         # print()
 
-    for i in range(num_joints):
-        jacobian[:3, i] = zs[i].cross((ts[-1] - ts[i]))
-        jacobian[3:, i] = zs[i]
+    for i, dh_row_idx in enumerate(rows_with_angle):
+        jacobian[:3, i] = zs[dh_row_idx].cross((ts[-1] - ts[dh_row_idx]))
+        jacobian[3:, i] = zs[dh_row_idx]
         # print(i)
         # print("zi", zs[i])
         # print("ti", ts[i])
         # print("t3", ts[-1])
         # print()
 
-    return jacobian
+    return jacobian, Ts
 
 # Define symbolic variables
 # theta1, theta2, theta3 = sp.symbols('theta1 theta2 theta3')
@@ -77,26 +79,52 @@ def jacobian_from_classical_dh(dh_table, joint_angles):
 #     (q3, 0, l3, 0)
 # ]
 
-q1, q2, q3, q4 = sp.symbols('q1 q2 q3 q4')
+# q1, q2, q3, q4 = sp.symbols('q1 q2 q3 q4')
+# a2, a3, a5, a6, a7 = sp.symbols('a2 a3 a5 a6 a7')
+
+# # Define the DH table # theta, d, a, alpha
+# dh_table_panda_4DoF = [
+#     (q1,         0,     0,      -sp.pi/2),
+#     (q2-sp.pi/2, 0,     a2,     0),
+#     (sp.pi/2,    0,     a3,     sp.pi),
+#     (q3,         0,     -a3,    0),
+#     (sp.pi/2,    0,     a5,     0),
+#     (q4-sp.pi/2, 0,     a6,     0),
+#     (-sp.pi/2,   0,     a7,     -sp.pi/2)
+# ]
+
+# # Define joint angles
+# joint_angles = [q1, q2, q3, q4]
+
+q1 = sp.symbols('q1')
+q2 = sp.symbols('q2')
+q3 = sp.symbols('q3')
+
 a2, a3, a5, a6, a7 = sp.symbols('a2 a3 a5 a6 a7')
 
 # Define the DH table # theta, d, a, alpha
-dh_table_panda = [
-    (q1,         0,     0,      -sp.pi/2),
-    (q2-sp.pi/2, 0,     a2,     0),
+dh_table_panda_3DoF = [
+    (0,         0,     0,      -sp.pi/2),
+    (q1-sp.pi/2, 0,     a2,     0),
     (sp.pi/2,    0,     a3,     sp.pi),
-    (q3,         0,     -a3,    0),
+    (q2,         0,     -a3,    0),
     (sp.pi/2,    0,     a5,     0),
-    (q4-sp.pi/2, 0,     a6,     0),
+    (q3-sp.pi/2, 0,     a6,     0),
     (-sp.pi/2,   0,     a7,     -sp.pi/2)
 ]
 
 # Define joint angles
-joint_angles = [q1, q2, q3, q4]
+rows_with_angle = [1, 3, 5] # index of dh table that contains angle variable
 
 # Compute the Jacobian matrix
-jacobian_matrix = jacobian_from_classical_dh(dh_table_panda, joint_angles)
+jacobian_matrix, Ts = jacobian_from_classical_dh(dh_table_panda_3DoF, rows_with_angle)
 
 # Display the Jacobian matrix
 print("Jacobian Matrix:")
 print(jacobian_matrix)
+
+print("Transformation Matrix:")
+for i in range(len(Ts)):
+    print("T frame ", i, "to frame 0: ")
+    print(Ts[i])
+    print()
