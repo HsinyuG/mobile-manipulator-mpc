@@ -2,7 +2,7 @@ from sympy import symbols, Eq, solve, sin, cos # not used because closed form so
 import casadi as ca
 import numpy as np
 
-target_position = np.array([0.5, 0.5])
+target_position = np.array([0.6, 0.1])
 
 # Define the symbolic variables
 q1 = ca.MX.sym('q1')
@@ -33,7 +33,7 @@ nlp = {'x': ca.vertcat(q1, q2, q3), 'f': cost, 'g': ineq_constraints} # all valu
 solver = ca.nlpsol('solver', 'ipopt', nlp, opts_setting)
 
 result = solver(x0=[0.0, 0.0, 0.0], lbg=[-ca.pi/2, -ca.pi*3/4, 0], ubg=[ca.pi/2, 0, ca.pi*3/2])
-print(type(result['x']))
+print((result['x']))
 
 
 

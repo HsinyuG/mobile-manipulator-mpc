@@ -6,11 +6,11 @@ class MPCManipulator3DoF:
     def __init__(self,
         robot, 
         N = 10, 
-        Q = np.diag([1, 0., 1]),  # q1 q2 q3
-        P = np.diag([1, 0., 1]), 
-        R = np.diag([0, 0, 0]), # dq1 dq2 dq3 # 5e-8 both slow and jitter, 0 jitter
-        M = np.diag([1e-6, 1e-6, 1e-6]), # ddq1, ddq2, ddq3
-        qlim=(ca.horzcat(-ca.pi/2, -ca.pi*3/4, 0), ca.horzcat(ca.pi/2, 0, ca.pi*3/2)),  # TODO: check the boundary
+        Q = np.diag([1, 1., 1]),  # q1 q2 q3
+        P = np.diag([1, 1., 1]), 
+        R = np.diag([0.1, 0.1, 0.1]), # dq1 dq2 dq3 # 5e-8 both slow and jitter, 0 jitter
+        M = np.diag([1e-2, 1e-2, 1e-2]), # ddq1, ddq2, ddq3
+        qlim=(ca.horzcat(-ca.pi/2, -ca.pi*3/4, 0), ca.horzcat(ca.pi/2, 0, ca.pi)),  # TODO: check the boundary
         dqlim=(ca.horzcat(-1, -1, -1), ca.horzcat(1, 1, 1)),
         ddqlim=(ca.horzcat(-0.5, -0.5, -0.5), ca.horzcat(0.5, 0.5, 0.5))):
 
@@ -80,6 +80,7 @@ class MPCManipulator3DoF:
         else: terminal_state_error = self.X[self.N, :] - self.X_ref[self.N, :]
         # TODO: xyz constraints
         cost += ca.mtimes([terminal_state_error, self.P, terminal_state_error.T])
+        self.opti.subject_to(self.opti.bounded(self.qlim[0], self.X[self.N, :], self.qlim[1])) # q constraint
 
         self.opti.minimize(cost)
 

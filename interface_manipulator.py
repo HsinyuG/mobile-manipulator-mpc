@@ -72,7 +72,7 @@ class Interface:
             self.timerCallback()
         else: self.actuate3DoFManipulator()
         self.timer_counter += 1
-        if self.timer_counter == int(self.dt / self.sim_dt) - 1:
+        if self.timer_counter == int(self.dt / self.sim_dt):
             self.timer_counter = 0
 
         
@@ -97,8 +97,8 @@ class Interface:
 
         # step 3
         # self.calcLocalRefTraj([0])
-        # self.calcLocalRefTraj([0,1,2])
-        self.calcLocalRefPose()
+        self.calcLocalRefTraj([0,1,2])
+        # self.calcLocalRefPose()
 
         # step 4
         self.command = self.controller.solve(self.current_state, self.local_traj_ref, self.local_u_ref)
