@@ -24,12 +24,18 @@ class Interface:
         self.x_log = [] # q1 q2 q3 for 3Dof manipulator
         self.u_log = []
 
+        # counters and states
+        self.sim_dt = 0.01
+        self.timer_counter = 0
+        self.mpc_step_counter = 0
+        self.is_active = False
+
         if self.physical_sim: 
             init_state = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
             idx_3dof = np.array([4,6,8])
             init_state[idx_3dof] = self.x_start
             self.env, self.ob = sim.setup_environment(render=True, reconfigure_camera=False, obstacles=True, mode='vel',\
-                initial_state=init_state) 
+                initial_state=init_state, dt=self.sim_dt) 
                 # shape=(12,), [x, y, yaw, joint1~7, left finger, right finger] TODO: check this
 
         # self.globalPlan1D() # no need, just use single point as reference?
@@ -48,40 +54,62 @@ class Interface:
         '''
         self.current_state = self.x_start if self.physical_sim is False else None # processed in observationCallback() in loop
         self.task_flag = 'in progress'
-        num_step = 0
-        while(True):
-            num_step += 1
-            print(num_step, end=': ')
-            # step 1
-            if self.physical_sim is True: 
-                self.observationCallback()
-            print(self.current_state)
-            self.x_log.append(copy.deepcopy(self.current_state))
-            self.current_joints_pose = np.asarray(self.controller.robot_model.forward_tranformation(self.current_state)).flatten()
-            self.manipulator_pose_log.append(copy.deepcopy(self.current_joints_pose))
+        self.is_active = True
+        self.mpc_step_counter = 0
+        while(self.is_active):
+            self.pseudoTimer()
 
-            # step 2
-            # self.checkFinish1D()
-            self.checkFinishManipulator()
-            if self.task_flag != 'in progress': break # can be calling another global planner
+    
+    def pseudoTimer(self):
+        """ 
+        This function acts as a timer, synchronized with the simulation time.
+        No need to acquire sim time because gym won't update unless step() is called
+        """
+        if self.timer_counter == 0:
+            self.timerCallback()
+        else: self.actuate3DoFManipulator()
+        self.timer_counter += 1
+        if self.timer_counter == int(self.dt / self.sim_dt) - 1:
+            self.timer_counter = 0
 
-            # step 3
-            # self.calcLocalRefTraj([0])
-            # self.calcLocalRefTraj([0,1,2])
-            self.calcLocalRefPose()
+        
+    def timerCallback(self):
+        self.mpc_step_counter += 1
+        print(self.mpc_step_counter, end=': ')
 
-            # step 4
-            self.command = self.controller.solve(self.current_state, self.local_traj_ref, self.local_u_ref)
-            self.u_log.append(copy.deepcopy(np.asarray(self.command)))
+        # step 1
+        if self.physical_sim is True: 
+            self.observationCallback()
+        print(self.current_state)
+        self.x_log.append(copy.deepcopy(self.current_state))
+        self.current_joints_pose = np.asarray(self.controller.robot_model.forward_tranformation(self.current_state)).flatten()
+        self.manipulator_pose_log.append(copy.deepcopy(self.current_joints_pose))
 
-            # step 5
-            if self.physical_sim is True: 
-                # self.actuate()
-                self.actuate3DoFManipulator()
+        # step 2
+        # self.checkFinish1D()
+        self.checkFinishManipulator()
+        if self.task_flag != 'in progress': 
+            self.is_active = False # can be calling another global planner
+            return
 
-            # step 6
-            if self.physical_sim is False:
-                self.current_state = np.asarray(self.controller.f_dynamics(self.current_state, self.command)).squeeze()
+        # step 3
+        # self.calcLocalRefTraj([0])
+        self.calcLocalRefTraj([0,1,2])
+        # self.calcLocalRefPose()
+
+        # step 4
+        self.command = self.controller.solve(self.current_state, self.local_traj_ref, self.local_u_ref)
+        self.u_log.append(copy.deepcopy(np.asarray(self.command)))
+
+        # step 5
+        if self.physical_sim is True: 
+            # self.actuate()
+            self.actuate3DoFManipulator()
+
+        # step 6
+        if self.physical_sim is False:
+            self.current_state = np.asarray(self.controller.f_dynamics(self.current_state, self.command)).squeeze()
+
 
     def globalPlan1D(self):
         '''
@@ -138,7 +166,7 @@ class Interface:
         if (ca.norm_2(self.current_joints_pose[:3] - self.pose_target) <= 0.02):
             self.task_flag = 'finish'
 
-    def calcLocalRefTraj(self, distance_index, state_space):
+    def calcLocalRefTraj(self, distance_index):
         '''
         x_ref: global trajectory given in cartesian space
         distance_index: list, the indices of distance variable in the state vector

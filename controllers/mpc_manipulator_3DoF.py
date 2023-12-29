@@ -6,9 +6,9 @@ class MPCManipulator3DoF:
     def __init__(self,
         robot, 
         N = 10, 
-        Q = np.diag([5., 0., 5.]),  # x y z 
-        P = np.diag([5., 0., 5.]), 
-        R = np.diag([0.1, 0.1, 0.1]), # dq1 dq2 dq3
+        Q = np.diag([5, 0., 5]),  # q1 q2 q3
+        P = np.diag([5, 0., 5]), 
+        R = np.diag([5e-8, 5e-8, 5e-8]), # dq1 dq2 dq3
         qlim=(ca.horzcat(-ca.pi/2, -ca.pi*3/4, 0), ca.horzcat(ca.pi/2, 0, ca.pi*3/2)),  # TODO: check the boundary
         dqlim=(ca.horzcat(-1, -1, -1), ca.horzcat(1, 1, 1))): 
 
@@ -22,6 +22,7 @@ class MPCManipulator3DoF:
         # System dynamics, which is a kinematic model
         self.f_dynamics = robot.f_kinematics
         self.robot_model = robot
+        self.is_cartesian_ref = False # TODO: use as parameter, when true the reference is given in cartesian space
         self.reset()
 
     def reset(self):
@@ -49,8 +50,10 @@ class MPCManipulator3DoF:
         for k in range(self.N):
             self.opti.subject_to(self.X[k+1, :] == self.f_dynamics(self.X[k, :], self.U[k, :]))
 
-            x_endpoint, x_joint_2, x_joint_3 = self.robot_model.forward_tranformation(self.X[k, :]) 
-            state_error = x_endpoint - self.X_ref[k, :]
+            if self.is_cartesian_ref:
+                x_endpoint, x_joint_2, x_joint_3 = self.robot_model.forward_tranformation(self.X[k, :]) 
+                state_error = x_endpoint - self.X_ref[k, :]
+            else: state_error = self.X[k, :] - self.X_ref[k, :]
             # TODO: slack variable 
 
             control_error = self.U[k, :] - self.U_ref[k, :]
@@ -61,8 +64,10 @@ class MPCManipulator3DoF:
             
             # TODO: xyz constraints
 
-        x_endpoint_terminal, x_joint_2_terminal, x_joint_3_terminal = self.robot_model.forward_tranformation(self.X[self.N, :]) 
-        terminal_state_error = x_endpoint_terminal - self.X_ref[self.N, :]
+        if self.is_cartesian_ref:
+            x_endpoint_terminal, x_joint_2_terminal, x_joint_3_terminal = self.robot_model.forward_tranformation(self.X[self.N, :]) 
+            terminal_state_error = x_endpoint_terminal - self.X_ref[self.N, :]
+        else: terminal_state_error = self.X[self.N, :] - self.X_ref[self.N, :]
         # TODO: xyz constraints
         cost += ca.mtimes([terminal_state_error, self.P, terminal_state_error.T])
 
@@ -81,6 +86,10 @@ class MPCManipulator3DoF:
         self.opti.solver('ipopt', opts_setting)
 
     def solve(self, x_init, traj_ref, u_ref):
+
+        # debug, disable the infeasible sensor feedback, TODO: slack variable
+        x_init = np.maximum(np.minimum(x_init, self.qlim[1]), self.qlim[0]).squeeze()
+        assert x_init[1] <= 0 and x_init[2] >= 0
 
         # Set initial guess for the optimization problem
         if self.X_guess is None:

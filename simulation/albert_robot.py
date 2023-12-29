@@ -11,13 +11,13 @@ from simulation.obstacles import (
 )
 
 def setup_environment(
-        n_steps=1000, 
         render=False, 
         reconfigure_camera=False, 
         goal=True, 
         obstacles=True, 
         mode='vel',
-        initial_state=None
+        initial_state=None,
+        dt=0.01
     ):
     robots = [
         GenericDiffDriveRobot(
@@ -33,7 +33,7 @@ def setup_environment(
     ]
     env: UrdfEnv = gym.make(
         "urdf-env-v0",
-        dt=0.01, robots=robots, render=render
+        dt=dt, robots=robots, render=render
     )
     
     ob = env.reset(
