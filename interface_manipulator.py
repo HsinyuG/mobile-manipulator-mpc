@@ -65,6 +65,9 @@ class Interface:
         This function acts as a timer, synchronized with the simulation time.
         No need to acquire sim time because gym won't update unless step() is called
         """
+        if int(self.dt / self.sim_dt) <= 1:
+            self.timerCallback()
+            return
         if self.timer_counter == 0:
             self.timerCallback()
         else: self.actuate3DoFManipulator()
@@ -94,8 +97,8 @@ class Interface:
 
         # step 3
         # self.calcLocalRefTraj([0])
-        self.calcLocalRefTraj([0,1,2])
-        # self.calcLocalRefPose()
+        # self.calcLocalRefTraj([0,1,2])
+        self.calcLocalRefPose()
 
         # step 4
         self.command = self.controller.solve(self.current_state, self.local_traj_ref, self.local_u_ref)
@@ -211,7 +214,8 @@ class Interface:
         assert self.local_u_ref.shape[0] == self.controller.N
 
     def calcLocalRefPose(self):
-        self.local_traj_ref = np.tile(self.pose_target, (self.controller.N + 1, 1))
+        # self.local_traj_ref = np.tile(self.pose_target, (self.controller.N + 1, 1))
+        self.local_traj_ref = np.tile(self.traj_ref[-1], (self.controller.N + 1, 1))
         self.local_u_ref = np.zeros((self.controller.N, 3))
 
     def observationCallback(self):

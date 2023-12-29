@@ -6,19 +6,23 @@ class MPCManipulator3DoF:
     def __init__(self,
         robot, 
         N = 10, 
-        Q = np.diag([5, 0., 5]),  # q1 q2 q3
-        P = np.diag([5, 0., 5]), 
-        R = np.diag([5e-8, 5e-8, 5e-8]), # dq1 dq2 dq3
+        Q = np.diag([1, 0., 1]),  # q1 q2 q3
+        P = np.diag([1, 0., 1]), 
+        R = np.diag([0, 0, 0]), # dq1 dq2 dq3 # 5e-8 both slow and jitter, 0 jitter
+        M = np.diag([1e-6, 1e-6, 1e-6]), # ddq1, ddq2, ddq3
         qlim=(ca.horzcat(-ca.pi/2, -ca.pi*3/4, 0), ca.horzcat(ca.pi/2, 0, ca.pi*3/2)),  # TODO: check the boundary
-        dqlim=(ca.horzcat(-1, -1, -1), ca.horzcat(1, 1, 1))): 
+        dqlim=(ca.horzcat(-1, -1, -1), ca.horzcat(1, 1, 1)),
+        ddqlim=(ca.horzcat(-0.5, -0.5, -0.5), ca.horzcat(0.5, 0.5, 0.5))):
 
         self.Q = Q
         self.R = R
         self.P = P
+        self.M = M
         self.dt = robot.dt
         self.N = N
         self.qlim = qlim
         self.dqlim = dqlim
+        self.ddqlim = ddqlim
         # System dynamics, which is a kinematic model
         self.f_dynamics = robot.f_kinematics
         self.robot_model = robot
@@ -36,14 +40,15 @@ class MPCManipulator3DoF:
         '''
         self.X = self.opti.variable(self.N+1, 3)    # states are [q1 q2 q3].T
         self.U = self.opti.variable(self.N, 3)      # inputs are [dq1 dq2 dq3].T
-
+        
+        self.U_last = self.opti.parameter(self.N, 3)
         self.X_init = self.opti.parameter(1, 3)
 
         self.X_ref = self.opti.parameter(self.N+1, 3)
         self.U_ref = self.opti.parameter(self.N, 3)
 
-        self.X_guess = None
-        self.U_guess = None
+        self.x_guess = None
+        self.u_latest = None
         
         cost = 0
         # Define constraints and cost
@@ -57,10 +62,15 @@ class MPCManipulator3DoF:
             # TODO: slack variable 
 
             control_error = self.U[k, :] - self.U_ref[k, :]
-            cost += ca.mtimes([state_error, self.Q, state_error.T]) \
-                                + ca.mtimes([control_error, self.R, control_error.T])
+            control_change = self.U[k, :] - self.U_last[k, :]
+
+            cost += ca.mtimes([state_error, self.Q, state_error.T])
+            cost += ca.mtimes([control_error, self.R, control_error.T])
+            cost += ca.mtimes([control_change, self.M, control_change.T])
+
             self.opti.subject_to(self.opti.bounded(self.dqlim[0], self.U[k, :], self.dqlim[1])) # dq constraint
             self.opti.subject_to(self.opti.bounded(self.qlim[0], self.X[k, :], self.qlim[1])) # q constraint
+            self.opti.subject_to(self.opti.bounded(self.ddqlim[0], control_change, self.ddqlim[1]))
             
             # TODO: xyz constraints
 
@@ -92,28 +102,30 @@ class MPCManipulator3DoF:
         assert x_init[1] <= 0 and x_init[2] >= 0
 
         # Set initial guess for the optimization problem
-        if self.X_guess is None:
-            self.X_guess = np.ones((self.N+1, 3)) * x_init
+        if self.x_guess is None:
+            self.x_guess = np.ones((self.N+1, 3)) * x_init
 
-        if self.U_guess is None:
-            self.U_guess = np.zeros((self.N, 3))
+        if self.u_latest is None:
+            self.u_latest = np.zeros((self.N, 3))
         
-        self.opti.set_initial(self.X, self.X_guess)
-        self.opti.set_initial(self.U, self.U_guess)
+        self.opti.set_initial(self.X, self.x_guess)
+        self.opti.set_initial(self.U, self.u_latest)
 
         self.opti.set_value(self.X_ref, traj_ref)
         self.opti.set_value(self.U_ref, u_ref)
+        # set the U_last for next solve() call
+        self.opti.set_value(self.U_last, self.u_latest)
         
         self.opti.set_value(self.X_init, x_init)
 
         sol = self.opti.solve()
         
-        ## obtain the initial guess of solutions of the next optimization problem
-        self.X_guess = sol.value(self.X)
-        self.U_guess = sol.value(self.U) 
-        if self.U_guess.ndim == 1: 
-            self.U_guess = self.U_guess.reshape(-1,1)
-        return self.U_guess[0, :]
+        # obtain the initial guess of solutions of the next optimization problem
+        self.x_guess = sol.value(self.X)
+        self.u_latest = sol.value(self.U) # shape == (self.N, 3)
+
+        # TODO: replace with u_latest
+        return self.u_latest[0, :]
         
 
 
