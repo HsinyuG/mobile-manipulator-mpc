@@ -1,16 +1,38 @@
 import casadi as ca
-import matplotlib.pyplot as plt
 import numpy as np
+
+
+def obstacle_avoidance_constraints(opti, obstacle_point, positions, normals, M=1e6, eps=1e-3):
+    # This function creates slack variables and constraints for obstacle avoidance
+    # and returns them to be added to the optimization problem.
+
+    obstacle_constraints = []
+    penalty = 0
+
+    for pos in positions:
+        for n in normals:
+            # Create a slack variable for each obstacle avoidance condition
+            slack = opti.variable()
+            opti.subject_to(slack >= 0)
+
+            q = obstacle_point - pos
+            obstacle_constraints.append(opti.bounded(eps, ca.mtimes(n.T, q) + M * slack, ca.inf))
+
+            # Add the slack penalty to the penalty term
+            penalty += M * slack
+
+    return obstacle_constraints, penalty
+
 
 class MPCManipulator3DoF:
     def __init__(self,
-        robot, 
-        N = 10, 
-        Q = np.diag([1, 0., 1]),  # q1 q2 q3
-        P = np.diag([1, 0., 1]), 
+        robot,
+        N = 10,
+        Q = np.diag([1, 1, 1]),  # q1 q2 q3
+        P = np.diag([1, 1, 1]),
         R = np.diag([0, 0, 0]), # dq1 dq2 dq3 # 5e-8 both slow and jitter, 0 jitter
-        M = np.diag([1e-6, 1e-6, 1e-6]), # ddq1, ddq2, ddq3
-        qlim=(ca.horzcat(-ca.pi/2, -ca.pi*3/4, 0), ca.horzcat(ca.pi/2, 0, ca.pi*3/2)),  # TODO: check the boundary
+        M = np.diag([0, 0, 0]), # ddq1, ddq2, ddq3
+        qlim=(ca.horzcat(-ca.pi/2, -ca.pi*3/4, 0), ca.horzcat(ca.pi/2, 0, ca.pi)),  # TODO: check the boundary
         dqlim=(ca.horzcat(-1, -1, -1), ca.horzcat(1, 1, 1)),
         ddqlim=(ca.horzcat(-0.5, -0.5, -0.5), ca.horzcat(0.5, 0.5, 0.5))):
 
@@ -40,7 +62,7 @@ class MPCManipulator3DoF:
         '''
         self.X = self.opti.variable(self.N+1, 3)    # states are [q1 q2 q3].T
         self.U = self.opti.variable(self.N, 3)      # inputs are [dq1 dq2 dq3].T
-        
+
         self.U_last = self.opti.parameter(self.N, 3)
         self.X_init = self.opti.parameter(1, 3)
 
@@ -49,17 +71,16 @@ class MPCManipulator3DoF:
 
         self.x_guess = None
         self.u_latest = None
-        
+
         cost = 0
         # Define constraints and cost
         for k in range(self.N):
             self.opti.subject_to(self.X[k+1, :] == self.f_dynamics(self.X[k, :], self.U[k, :]))
 
+            x_endpoint, x_joint_2, x_joint_3 = self.robot_model.forward_tranformation(self.X[k, :])
             if self.is_cartesian_ref:
-                x_endpoint, x_joint_2, x_joint_3 = self.robot_model.forward_tranformation(self.X[k, :]) 
                 state_error = x_endpoint - self.X_ref[k, :]
             else: state_error = self.X[k, :] - self.X_ref[k, :]
-            # TODO: slack variable 
 
             control_error = self.U[k, :] - self.U_ref[k, :]
             control_change = self.U[k, :] - self.U_last[k, :]
@@ -71,11 +92,26 @@ class MPCManipulator3DoF:
             self.opti.subject_to(self.opti.bounded(self.dqlim[0], self.U[k, :], self.dqlim[1])) # dq constraint
             self.opti.subject_to(self.opti.bounded(self.qlim[0], self.X[k, :], self.qlim[1])) # q constraint
             self.opti.subject_to(self.opti.bounded(self.ddqlim[0], control_change, self.ddqlim[1]))
-            
-            # TODO: xyz constraints
 
+
+
+            obstacle_point = np.array([[0.3, 0, 0.3]])
+            normals = [np.array([0, 0, -1]), np.array([1, 0, 0])]
+            positions = [x_joint_2/2, x_joint_2, (x_joint_2 + x_joint_3)/2 , x_joint_3,
+                         (x_joint_3 + x_endpoint)/2, x_endpoint]
+
+            # Get the constraints
+            obstacle_constraints, obstacle_penalty = obstacle_avoidance_constraints(
+                self.opti, obstacle_point, positions, normals
+            )
+            for constraint in obstacle_constraints:
+                self.opti.subject_to(constraint)
+
+            cost += obstacle_penalty
+
+        x_endpoint_terminal, x_joint_2_terminal, x_joint_3_terminal = self.robot_model.forward_tranformation(
+            self.X[self.N, :])
         if self.is_cartesian_ref:
-            x_endpoint_terminal, x_joint_2_terminal, x_joint_3_terminal = self.robot_model.forward_tranformation(self.X[self.N, :]) 
             terminal_state_error = x_endpoint_terminal - self.X_ref[self.N, :]
         else: terminal_state_error = self.X[self.N, :] - self.X_ref[self.N, :]
         # TODO: xyz constraints
@@ -107,7 +143,7 @@ class MPCManipulator3DoF:
 
         if self.u_latest is None:
             self.u_latest = np.zeros((self.N, 3))
-        
+
         self.opti.set_initial(self.X, self.x_guess)
         self.opti.set_initial(self.U, self.u_latest)
 
@@ -115,17 +151,17 @@ class MPCManipulator3DoF:
         self.opti.set_value(self.U_ref, u_ref)
         # set the U_last for next solve() call
         self.opti.set_value(self.U_last, self.u_latest)
-        
+
         self.opti.set_value(self.X_init, x_init)
 
         sol = self.opti.solve()
-        
+
         # obtain the initial guess of solutions of the next optimization problem
         self.x_guess = sol.value(self.X)
         self.u_latest = sol.value(self.U) # shape == (self.N, 3)
 
         # TODO: replace with u_latest
         return self.u_latest[0, :]
-        
+
 
 

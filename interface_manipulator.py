@@ -1,5 +1,7 @@
 import casadi as ca
+import matplotlib
 import matplotlib.pyplot as plt
+matplotlib.use('TkAgg')
 import numpy as np
 import tqdm
 import copy
@@ -9,9 +11,9 @@ import simulation.albert_robot as sim
 class Interface:
     def __init__(self, dt, t_total, x_start, pose_target, controller, physical_sim=False):
         '''
-        TODO: 
+        TODO:
         1. assign values
-        2. compute global reference trajectory 
+        2. compute global reference trajectory
         '''
         self.dt = dt
         self.desired_t_total = t_total
@@ -30,12 +32,12 @@ class Interface:
         self.mpc_step_counter = 0
         self.is_active = False
 
-        if self.physical_sim: 
+        if self.physical_sim:
             init_state = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
             idx_3dof = np.array([4,6,8])
             init_state[idx_3dof] = self.x_start
             self.env, self.ob = sim.setup_environment(render=True, reconfigure_camera=False, obstacles=True, mode='vel',\
-                initial_state=init_state, dt=self.sim_dt) 
+                initial_state=init_state, dt=self.sim_dt)
                 # shape=(12,), [x, y, yaw, joint1~7, left finger, right finger] TODO: check this
 
         # self.globalPlan1D() # no need, just use single point as reference?
@@ -43,7 +45,7 @@ class Interface:
 
     def run(self, ):
         '''
-        TODO: 
+        TODO:
         while(not end)
             1 call observationCallback to get current state (or its estimation)
             2 check if we finish the task or need to change the task
@@ -59,9 +61,9 @@ class Interface:
         while(self.is_active):
             self.pseudoTimer()
 
-    
+
     def pseudoTimer(self):
-        """ 
+        """
         This function acts as a timer, synchronized with the simulation time.
         No need to acquire sim time because gym won't update unless step() is called
         """
@@ -75,13 +77,13 @@ class Interface:
         if self.timer_counter == int(self.dt / self.sim_dt) - 1:
             self.timer_counter = 0
 
-        
+
     def timerCallback(self):
         self.mpc_step_counter += 1
         print(self.mpc_step_counter, end=': ')
 
         # step 1
-        if self.physical_sim is True: 
+        if self.physical_sim is True:
             self.observationCallback()
         print(self.current_state)
         self.x_log.append(copy.deepcopy(self.current_state))
@@ -91,7 +93,7 @@ class Interface:
         # step 2
         # self.checkFinish1D()
         self.checkFinishManipulator()
-        if self.task_flag != 'in progress': 
+        if self.task_flag != 'in progress':
             self.is_active = False # can be calling another global planner
             return
 
@@ -105,7 +107,7 @@ class Interface:
         self.u_log.append(copy.deepcopy(np.asarray(self.command)))
 
         # step 5
-        if self.physical_sim is True: 
+        if self.physical_sim is True:
             # self.actuate()
             self.actuate3DoFManipulator()
 
@@ -116,8 +118,8 @@ class Interface:
 
     def globalPlan1D(self):
         '''
-        TODO: 
-        compute global reference trajectory 
+        TODO:
+        compute global reference trajectory
         '''
         traj_length = int(self.desired_t_total/self.dt)
 
@@ -166,15 +168,15 @@ class Interface:
         '''
         check if manipulator reach the target pose
         '''
-        if (ca.norm_2(self.current_joints_pose[:3] - self.pose_target) <= 0.02):
+        if (ca.norm_2(self.current_joints_pose[:3] - self.pose_target) <= 0.06):
             self.task_flag = 'finish'
 
     def calcLocalRefTraj(self, distance_index):
         '''
         x_ref: global trajectory given in cartesian space
         distance_index: list, the indices of distance variable in the state vector
-        TODO: 
-        compute global reference trajectory 
+        TODO:
+        compute global reference trajectory
         if the goal lies within the horizon, repeat the last reference point
         '''
         distance_index = np.asarray(distance_index)
@@ -192,7 +194,7 @@ class Interface:
                 min_distance = distance
                 min_idx = i
 
-        terminal_index = min_idx + self.controller.N + 1   # reference (N+1) states and N inputs    
+        terminal_index = min_idx + self.controller.N + 1   # reference (N+1) states and N inputs
         if terminal_index <= self.traj_ref.shape[0]:
             self.local_traj_ref = self.traj_ref[min_idx : terminal_index]
             self.local_u_ref = self.u_ref[min_idx : terminal_index-1]
@@ -209,7 +211,7 @@ class Interface:
             # print(self.local_traj_ref.shape)
             # print(self.local_u_ref.shape)
             # print(self.local_traj_ref)
-        
+
         assert self.local_traj_ref.shape[0] == self.controller.N + 1
         assert self.local_u_ref.shape[0] == self.controller.N
 
@@ -220,8 +222,8 @@ class Interface:
 
     def observationCallback(self):
         '''
-        TODO: get the state feedback in simulation, 
-        e.g. 
+        TODO: get the state feedback in simulation,
+        e.g.
         self.observation = some function from simulation
         self.current_state = somehow(self.observation)
         '''
@@ -234,7 +236,7 @@ class Interface:
     def autuate(self):
         '''
         TODO: use the return of mpc.solve() to set commands in simulation
-        e.g. 
+        e.g.
         some function from simulation(self.command)
         '''
         pass
@@ -273,7 +275,7 @@ class Interface:
         plt.plot(t[:self.traj_ref.shape[0]], self.traj_ref[:, 0])
         plt.xlabel('Time Step')
         plt.ylabel('p ref')
-        plt.grid()        
+        plt.grid()
 
         plt.show()
 
@@ -308,7 +310,7 @@ class Interface:
         plt.show(block=False)
 
         # x y z
-        plt.figure(2)   
+        plt.figure(2)
         plt.subplot(131)
         plt.plot(t, self.manipulator_pose_log[:, 0], label='x')
         plt.plot(t, self.manipulator_pose_log[:, 1], label='y')
@@ -325,7 +327,7 @@ class Interface:
         plt.xlabel('Time Step')
         plt.ylabel('joint 2')
         plt.legend()
-        plt.grid()       
+        plt.grid()
 
         plt.subplot(133)
         plt.plot(t, self.manipulator_pose_log[:, 6], label='x')
@@ -334,6 +336,6 @@ class Interface:
         plt.xlabel('Time Step')
         plt.ylabel('joint 3')
         plt.legend()
-        plt.grid()   
+        plt.grid()
 
         plt.show()
