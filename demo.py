@@ -17,4 +17,4 @@ mpc_demo = MPC(bot_demo, N=N)
 world = Interface(dt, t_total, x_start, x_target, mpc_demo, physical_sim=False)
 
 world.run()
-world.plot()
+world.plot1D()

@@ -7,10 +7,10 @@ class MPC:
         robot, 
         N = 10, 
         Q = np.diag([1., 0.0]), 
-        P = np.diag([1., 0.0]),
+        P = np.diag([1., 0.0]), 
         R = np.diag([0.1]), 
         vlim=(-1, 1), 
-        alim=(-5, 5)):
+        alim=(-5, 5)): 
 
         self.Q = Q
         self.R = R

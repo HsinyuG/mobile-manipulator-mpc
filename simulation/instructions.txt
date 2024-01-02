@@ -1,0 +1,18 @@
+Instructions to run:
+
+1. Follow the instructions and download the code from https://github.com/maxspahn/gym_envs_urdf
+2. Navigate to the gym_envs_urdf folder
+3. Create and navigate to a new folder within gym_envs_urdf
+4. Copy the files from this folder in the new folder
+5. Run the run_simulation.py script
+
+Some notes:
+
+- In the run function in run_simulation.py, the simulation is ran in single steps,
+  This means that we could do something here with the 'observation' that is returned
+- You can change the parameters for the  simulation environment
+- It is now set to the 'vel' (velocity) mode,
+  but you can also use 'acc' (acceleration) or 'tor' (torque)
+- The obstacles are defined in obstacles.py
+  I now just defined some examples manually,
+  but I'm planning to make a function for creating obstacles
