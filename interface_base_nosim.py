@@ -73,10 +73,15 @@ class Interface:
         '''
         traj_length = int(self.desired_t_total/self.dt)
 
-        # only give the positions, velocity references are not used thus will not be panalized
-        self.traj_ref = np.array([np.linspace(self.x_start[0], self.x_target[0], int(traj_length + 1)),
-                                 np.linspace(self.x_start[1], self.x_target[1], int(traj_length + 1))]
-                                ).T
+        # only give the positions, linear velocity references are not given thus will not be panalized
+        self.traj_ref = np.array([
+            np.linspace(self.x_start[0], self.x_target[0], int(traj_length + 1)),
+            np.linspace(self.x_start[1], self.x_target[1], int(traj_length + 1)),
+            np.zeros(int(traj_length + 1)),
+            np.zeros(int(traj_length + 1)),
+            np.zeros(int(traj_length + 1)),
+            np.zeros(int(traj_length + 1))
+        ]).T
 
         self.u_ref = np.zeros((traj_length,2))
 
@@ -101,7 +106,7 @@ class Interface:
         # choose the cloest traj_ref to be reference point
         for i, ref_point in enumerate(self.traj_ref):
             # print('ref_point',ref_point)
-            distance = np.linalg.norm(self.current_state[:2] - ref_point)
+            distance = np.linalg.norm(self.current_state[:2] - ref_point[:2])
             if distance < min_distance:
                 min_distance = distance
                 min_idx = i
@@ -162,9 +167,28 @@ class Interface:
         plt.grid()
 
         plt.subplot(313)
-        plt.plot(t, self.x_log[:, 3])
+        plt.plot(t, self.x_log[:, 2])
         plt.xlabel('Time Step')
         plt.ylabel('psi')
+        plt.grid()
+
+        plt.figure()
+        plt.subplot(311)
+        plt.plot(t, self.x_log[:, 3])
+        plt.xlabel('Time Step')
+        plt.ylabel('dx')
+        plt.grid()
+
+        plt.subplot(312)
+        plt.plot(t, self.x_log[:, 4])
+        plt.xlabel('Time Step')
+        plt.ylabel('dy')
+        plt.grid()
+
+        plt.subplot(313)
+        plt.plot(t, self.x_log[:, 5])
+        plt.xlabel('Time Step')
+        plt.ylabel('dpsi')
         plt.grid()
         
         plt.figure()

@@ -4,10 +4,12 @@ from urdfenvs.robots.generic_urdf.generic_diff_drive_robot import GenericDiffDri
 from urdfenvs.urdf_common.urdf_env import UrdfEnv
 
 from simulation.obstacles import (
-    movable_sphere1,
-    static_box1,
-    movable_box1,
-    static_cylinder
+    # movable_sphere1,
+    # static_box1,
+    # movable_box1,
+    # static_cylinder,
+    static_cylinder_2,
+    static_cylinder_3
 )
 
 def setup_environment(
@@ -17,7 +19,7 @@ def setup_environment(
         obstacles=True, 
         mode='vel',
         initial_state=None,
-        dt=0.01
+        dt=0.01,
     ):
     robots = [
         GenericDiffDriveRobot(
@@ -27,8 +29,8 @@ def setup_environment(
             castor_wheels=["rotacastor_right_joint", "rotacastor_left_joint"],
             wheel_radius = 0.08,
             wheel_distance = 0.494,
-            spawn_rotation = 0, # Change initial direction
-            facing_direction = 'x',
+            spawn_rotation = np.pi/2, # Change initial direction to face +x; another bug in albert model
+            # facing_direction = '-y', # useless property, a bug of simulation
         ),
     ]
     env: UrdfEnv = gym.make(
@@ -42,13 +44,14 @@ def setup_environment(
     print(f"Initial observation : {ob}")
 
     if obstacles:
-        env.add_obstacle(movable_sphere1)
-        env.add_obstacle(static_box1)
-        env.add_obstacle(movable_box1)
-        env.add_obstacle(static_cylinder)
+        # env.add_obstacle(movable_sphere1)
+        # env.add_obstacle(static_box1)
+        # env.add_obstacle(movable_box1)
+        env.add_obstacle(static_cylinder_2)
+        env.add_obstacle(static_cylinder_3)
     
     if reconfigure_camera:
-        env.reconfigure_camera(4.0, 0.0, -90.01, (0, -2.0, 0))
+        env.reconfigure_camera(4.0, 180.0, -90.01, (0, 0.0, 0)) # -90.00 not working!
     
     return env, ob
 
