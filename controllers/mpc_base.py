@@ -8,18 +8,18 @@ class MPCBase:
         robot, 
         obstacle_list,
         N = 10, 
-        Q = np.diag([2., 2., 0., 0, 0, 1.]), # x y psi dx dy dpsi
-        P = np.diag([2., 2., 0., 0, 0, 1.]), 
+        Q = np.diag([5., 5., 0.0, 0, 0, 1.]), # x y psi dx dy dpsi
+        P = np.diag([5., 5., 0.0, 0, 0, 1.]),  # [2., 2., 0., 0, 0, 1.]
         R = np.diag([1., 1.]), 
-        M = np.diag([1e2]),
+        M = np.diag([1e5]), # 1e3, th=0.0, r=0.4
         ulim=np.array([[-2, -ca.pi],[2, ca.pi]]), # dv, dw
         xlim=np.array([[-100, -100, -2, -2, -ca.pi],[100, 100, 2, 2, ca.pi]]) # x, y, _, dx, dy, dpsi
         ):
 
-        self.Q = Q
-        self.R = R
-        self.P = P
-        self.M = M
+        self.Q_value = Q
+        self.R_value = R
+        self.P_value = P
+        self.M_value = M
         self.dt = robot.dt
         self.N = N
         self.ulim = ulim
@@ -48,9 +48,68 @@ class MPCBase:
 
     def obsAvoid(self, obstacle_list, x):
         g = []
+        threshold = 0.5
         for obs in obstacle_list:
-            g.append((obs.radius + self.base_radius()) - ca.sqrt((x[0]-obs.x)**2 + (x[1]-obs.y)**2)) # should be <= 0
+            g.append((obs.radius + self.base_radius()) - ca.sqrt((x[0]-obs.x)**2 + (x[1]-obs.y)**2) + threshold) # should be <= 0
         return g # all elements should be <= 0
+    
+    def angleDiff(self, a, b):
+        """
+        input angle from any range, output a-b converted to [-pi, pi)
+        in this program a and b are equivalent because we use the squared error
+        """
+        a = ca.fmod((a + ca.pi), (2*ca.pi)) - ca.pi # convert to [-pi.pi)
+        b = ca.fmod((b + ca.pi), (2*ca.pi)) - ca.pi
+
+        # try:
+        #     if a * b >= 0: # both [-pi, 0] or [0, pi) 
+        #         angle_diff = a - b
+        #     elif a > b: # a (0, pi), b [-pi, 0)
+        #         angle_diff = a - b if a - b <= ca.pi else a - b - 2*ca.pi
+        #     elif a < b: # a [-pi, 0), b (0, pi)
+        #         angle_diff = a - b if a - b > -ca.pi else a - b + 2*ca.pi
+        #     print("=================angle diff working=================")
+        # except:
+        #     angle_diff = a - b
+        #     print("angle diff not working because of casadi")
+        
+        angle_diff = ca.if_else(
+            a * b >= 0, 
+            a - b, 
+            ca.if_else(
+                a > b, 
+                ca.if_else(
+                    a - b <= ca.pi, 
+                    a - b, 
+                    a - b - 2 * ca.pi
+                ), 
+                ca.if_else(
+                    a - b > -ca.pi, 
+                    a - b, 
+                    a - b + 2 * ca.pi
+                )
+            )
+        )
+
+        return angle_diff
+
+    def setWeight(self, Q=None, R=None, P=None, M=None):
+        if Q is not None: 
+            self.Q_value = Q
+            
+        if R is not None: 
+            self.R_value = R
+            
+        if P is not None: 
+            self.P_value = P
+            
+        if M is not None: 
+            self.M_value = M
+            
+        self.opti.set_value(self.Q, self.Q_value)
+        self.opti.set_value(self.R, self.R_value)
+        self.opti.set_value(self.P, self.P_value)
+        self.opti.set_value(self.M, self.M_value)
 
     def reset(self):
         # Define optimization variables
@@ -72,11 +131,23 @@ class MPCBase:
 
         self.X_guess = None
         self.U_guess = None
+
+        self.Q = self.opti.parameter(6,6)
+        self.R = self.opti.parameter(2,2)
+        self.P = self.opti.parameter(6,6)
+        self.M = self.opti.parameter(1,1)
+
+        self.setWeight()
+
         cost = 0
         # Define constraints and cost, casadi requires x[k, :] instead of x[k] (which will be shape(1,1)) when calling row vector
         for k in range(self.N):
             self.opti.subject_to(self.X[k+1, :] == self.f_dynamics(self.X[k, :], self.U[k, :]))
-            state_error = self.X[k, :] - self.X_ref[k, :]
+            state_error = ca.horzcat(
+                self.X[k, :2] - self.X_ref[k, :2],
+                self.angleDiff(self.X[k, 2], self.X_ref[k, 2]),
+                self.X[k, 3:] - self.X_ref[k, 3:]
+            )
             control_error = self.U[k, :] - self.U_ref[k, :]
             cost += ca.mtimes([state_error, self.Q, state_error.T]) \
                                 + ca.mtimes([control_error, self.R, control_error.T])
@@ -88,8 +159,12 @@ class MPCBase:
             # constraint_error = self.slackObsAvoid(self.obstacle_list, self.X[k, :])
             cost += ca.mtimes([self.s[k], self.M, self.s[k]])
             
-        terminal_state_error = self.X[self.N, :] - self.X_ref[self.N, :]
-        print('terminal_state_error,',terminal_state_error.shape)
+        terminal_state_error = ca.horzcat(
+                self.X[self.N, :2] - self.X_ref[self.N, :2],
+                self.angleDiff(self.X[self.N, 2], self.X_ref[self.N, 2]),
+                self.X[self.N, 3:] - self.X_ref[self.N, 3:]
+            )
+        # print('terminal_state_error,',terminal_state_error.shape)
         cost += ca.mtimes([terminal_state_error, self.P, terminal_state_error.T])
         self.opti.subject_to(self.X[0, :] == self.X_init)# Initial state as constraints
         self.opti.subject_to(self.opti.bounded(self.xlim[0, 0:2].reshape(1,2), self.X[self.N, 0:2], self.xlim[1, 0:2].reshape(1,2))) # state constraint
@@ -133,7 +208,7 @@ class MPCBase:
 
         try:
             sol = self.opti.solve()
-            s = self.opti.debug.value(self.s)
+            # s = self.opti.debug.value(self.s)
         except:
             print("here should be a debug breakpoint")
             x = self.opti.debug.value(self.X)

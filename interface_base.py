@@ -54,7 +54,7 @@ class Interface:
             (6 calculate expected robot state if simulation part is not yet implemented)
         '''
         self.current_state = self.x_start if self.physical_sim is False else None # processed in observationCallback() in loop
-        self.task_flag = 'in progress'
+        self.task_flag = 'move'
         self.is_active = True
         self.mpc_step_counter = 0
         while(self.is_active):
@@ -89,15 +89,19 @@ class Interface:
 
         # step 2
         self.checkFinish2D()
-        if self.task_flag != 'in progress': 
+        if self.task_flag == 'finish': 
             self.is_active = False # can be calling another global planner
             return
 
         # step 3
         # self.calcLocalRefTraj([0]) # 1d
         # self.calcLocalRefTraj([0,1,2]) # manipulator
-        self.calcLocalRefTraj([0,1,2]) # base, consider orientation error when finding corresponding point on global ref traj
+        
         # self.calcLocalRefPose() # manipulator
+        if self.task_flag == 'approach':
+            self.calcLocalRefPose()
+        else: 
+            self.calcLocalRefTraj([0,1,2]) # base, with orientation error when finding corresponding point on global ref traj
 
         # step 4
         self.command = self.controller.solve(self.current_state, self.local_traj_ref, self.local_u_ref)
@@ -139,7 +143,8 @@ class Interface:
         self.traj_ref = np.array([
             np.linspace(self.x_start[0], self.pose_target[0], int(traj_length + 1)),
             np.linspace(self.x_start[1], self.pose_target[1], int(traj_length + 1)),
-            np.zeros(int(traj_length + 1)),
+            np.linspace(self.x_start[2], self.pose_target[2], int(traj_length + 1)),
+            # np.zeros(int(traj_length + 1)),
             np.zeros(int(traj_length + 1)),
             np.zeros(int(traj_length + 1)),
             np.zeros(int(traj_length + 1))
@@ -186,9 +191,23 @@ class Interface:
         '''
         check if we reach the goal
         '''
-        threshold = 0.1
+        
+        if (abs(self.current_state[0] - self.traj_ref[-1, 0]) <= 2) and \
+            (abs(self.current_state[1] - self.traj_ref[-1, 1]) <= 2) and \
+            self.task_flag == 'move': 
+            # (abs(self.command[0,0] - self.u_ref[-1, 0]) <= 1e-2) and \
+            # (abs(self.command[0,1] - self.u_ref[-1, 1]) <= 1e-2)
+            self.task_flag = 'approach'
+            self.controller.setWeight(
+                P = np.diag([5e2, 5e2, 5e2, 0, 0, 1.]), # 5e2 1
+                Q = np.diag([5e2, 5e2, 5e2, 0, 0, 1.]),
+                # R = np.diag([0, 0])
+            )
+
+        threshold = 0.01
         if (abs(self.current_state[0] - self.traj_ref[-1, 0]) <= threshold) and \
-            (abs(self.current_state[1] - self.traj_ref[-1, 1]) <= threshold): 
+            (abs(self.current_state[1] - self.traj_ref[-1, 1]) <= threshold) and \
+            (abs(self.current_state[2] - self.traj_ref[-1, 2]) <= 10*ca.pi/180): 
             # (abs(self.command[0,0] - self.u_ref[-1, 0]) <= 1e-2) and \
             # (abs(self.command[0,1] - self.u_ref[-1, 1]) <= 1e-2)
             self.task_flag = 'finish'
@@ -248,7 +267,7 @@ class Interface:
     def calcLocalRefPose(self):
         # self.local_traj_ref = np.tile(self.pose_target, (self.controller.N + 1, 1))
         self.local_traj_ref = np.tile(self.traj_ref[-1], (self.controller.N + 1, 1))
-        self.local_u_ref = np.zeros((self.controller.N, 3))
+        self.local_u_ref = np.tile(self.u_ref[-1], (self.controller.N, 1))
 
     def observationCallback(self):
         '''
