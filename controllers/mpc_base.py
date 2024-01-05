@@ -48,7 +48,7 @@ class MPCBase:
 
     def obsAvoid(self, obstacle_list, x):
         g = []
-        threshold = 0.5
+        threshold = 0.0 # 0.5 is safe, -0.1 is elegant
         for obs in obstacle_list:
             g.append((obs.radius + self.base_radius()) - ca.sqrt((x[0]-obs.x)**2 + (x[1]-obs.y)**2) + threshold) # should be <= 0
         return g # all elements should be <= 0

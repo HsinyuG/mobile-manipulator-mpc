@@ -1,49 +1,37 @@
-# import casadi as ca
-# import matplotlib.pyplot as plt
-# import numpy as np
+import casadi as ca
+import matplotlib.pyplot as plt
+import numpy as np
 
-# from interface_wholebody import Interface
-# from controllers.mpc_wholebody import MPCWholeBody
-# from robot_models.mobile_manipulator import MobileManipulator
-# from robot_models.obstacles import Obstacles
+from interface_wholebody_separate import Interface
 
-# # move base
-# dt = 0.1
-# N = 50
-# t_total = 5 # desired completion time, consider v_max = 2m/s
-# x_start = np.array([0., 0., ca.pi/4, 0., 0., 0.])  # ca.pi/4   
-# x_target = np.array([5., 5., -ca.pi/2, 0., 0., 0.]) # -ca.pi or -ca.pi/2
+from controllers.mpc_manipulator_3DoF import MPCManipulator3DoF
+from robot_models.manipulator_3DoF import ManipulatorPanda3DoF
 
-# obstacle_list = [
-#     Obstacles(2.5, 3.0, 0.6),
-#     Obstacles(2.5, 1.0, 0.6)
-# ]
-# #obstacle2 = Obstacles(30, 30, 4)
-# base_demo = Base(dt)
-# mpc_demo = MPCBase(base_demo, obstacle_list, N=N)
-# # mpc_demo = MPCBase(base_demo, N=N)
-# world = Interface(dt, t_total, x_start, x_target, mpc_demo, physical_sim=True)
+from controllers.mpc_base import MPCBase
+from robot_models.base import Base
+from robot_models.obstacles import Obstacles
 
-# world.run()
-# world.plot2D()
+# move base
+dt = 0.1
+N = 50
+t_move = 5 # desired completion time, consider v_max = 2m/s
+t_manipulate = 2
+base_x_start = np.array([0., 0., ca.pi/4, 0., 0., 0.])  # ca.pi/4   
+joint_x_start = np.array([0, 0, 0])
+global_pose_target = np.array([5.4243, 5.4243, 0.606+0.333+0.0, ca.pi/4])
 
+obstacle_list = [
+    Obstacles(2.5, 3.0, 0.6),
+    Obstacles(2.5, 1.0, 0.6),
+    Obstacles(5.4243, 5.4243, 0.1)
+]
 
+robot_base = Base(dt)
+controller_base = MPCBase(robot_base, obstacle_list, N=N)
+robot_manipulator = ManipulatorPanda3DoF(dt)
+controller_manipulator = MPCManipulator3DoF(robot_manipulator, N=N)
 
-# dt = 0.1
-# N = 50 
-# t_total = 5 
-# x_start = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0])     
-# pose_target = np.array([5, 5, 1.106, ca.pi/4]) 
+world = Interface(dt, t_move, t_manipulate, base_x_start, joint_x_start, global_pose_target, controller_base, controller_manipulator, physical_sim=True)
 
-# obstacle_list = [
-#     Obstacles(2.5, 3.0, 0.6),
-#     # Obstacles(2.5, 1.0, 0.6),
-#     Obstacles(5, 5, 0.1)
-# ]
-
-# mobile_manipulator = MobileManipulator(dt)
-# mpc_controller = MPCWholeBody(mobile_manipulator, obstacle_list, N=N)
-# world = Interface(dt, t_total, x_start, pose_target, mpc_controller, physical_sim=True)
-
-# world.run()
-# world.plot3D()
+world.run()
+world.plot3D()
