@@ -94,7 +94,7 @@ class ManipulatorPanda3DoF:
         q_initial_guess = np.asarray(q_initial_guess).squeeze()
         if x_target.shape[0] == 3:
 
-            assert(x_target[1] == 0.0, "y should always be 0")
+            assert x_target[1] == 0.0, "y should always be 0"
 
             # define variables
             q1 = ca.MX.sym('q1')
@@ -205,18 +205,18 @@ class ManipulatorPanda3DoF:
         return x_q_next
 
 # debug
-toy = ManipulatorPanda3DoF(0.1)
-print(toy.f_kinematics(
-    # ca.vertcat(0, 0, 0), # x
-    ca.vertcat(0, 0, 0), # q
-    ca.vertcat(0.0, 0.0, 0) # dq
-))
+# toy = ManipulatorPanda3DoF(0.1)
+# print(toy.f_kinematics(
+#     # ca.vertcat(0, 0, 0), # x
+#     ca.vertcat(0, 0, 0), # q
+#     ca.vertcat(0.0, 0.0, 0) # dq
+# ))
 
-print(toy.forward_tranformation(
-    # ca.vertcat([0.282888, -1.62375, 1.53274])
-    # ca.vertcat([0.39936281, -1.43605116,  1.21150565])
-    ca.vertcat([ 0.33722445, -1.53417834,  1.37474546])
-)[0])
+# print(toy.forward_tranformation(
+#     # ca.vertcat([0.282888, -1.62375, 1.53274])
+#     # ca.vertcat([0.39936281, -1.43605116,  1.21150565])
+#     ca.vertcat([ 0.33722445, -1.53417834,  1.37474546])
+# )[0])
 
 '''
 array([ 0.42323673, -1.39921683,  1.15256477])

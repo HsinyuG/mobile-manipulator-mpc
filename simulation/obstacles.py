@@ -30,7 +30,7 @@ static_cylinder_dict_2 = {
     "geometry": {
         "position": [2.5, 3.0, 0], # [3.0, -2.5, 0.0],
         "radius": 0.6,
-        "height": 2.0,
+        "height": 0.5,
     },
     "rgba": [0.1, 0.3, 0.3, 1.0],
 }
@@ -42,11 +42,23 @@ static_cylinder_dict_3 = {
     "geometry": {
         "position": [2.5, 1.0, 0], # [3.0, -2.5, 0.0],
         "radius": 0.6,
-        "height": 2.0,
+        "height": 0.5,
     },
     "rgba": [0.1, 0.3, 0.3, 1.0],
 }
 static_cylinder_3 = CylinderObstacle(name="cylinder_obstacle", content_dict=static_cylinder_dict_3)
+
+static_cylinder_dict_4 = {
+    "type": "cylinder",
+    "movable": False,
+    "geometry": {
+        "position": [5, 5, 0], # [3.0, -2.5, 0.0],
+        "radius": 0.1,
+        "height": 0.5,
+    },
+    "rgba": [0.1, 0.3, 0.3, 1.0],
+}
+static_cylinder_4 = CylinderObstacle(name="cylinder_obstacle", content_dict=static_cylinder_dict_4)
 
 static_box1_dict = {
     'type': 'box',

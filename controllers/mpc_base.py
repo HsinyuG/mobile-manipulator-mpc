@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-class MPC_Base:
+class MPCBase:
     def __init__(self,
-        base_demo, 
+        robot, 
         obstacle_list,
         N = 10, 
         Q = np.diag([2., 2., 0., 0, 0, 1.]), # x y psi dx dy dpsi
@@ -20,12 +20,12 @@ class MPC_Base:
         self.R = R
         self.P = P
         self.M = M
-        self.dt = base_demo.dt
+        self.dt = robot.dt
         self.N = N
         self.ulim = ulim
         self.xlim = xlim
-        self.f_dynamics = base_demo.f_kinematics #member function
-        self.base_radius = base_demo.base_radius #member function
+        self.f_dynamics = robot.f_kinematics #member function
+        self.base_radius = robot.base_radius #member function
         self.obstacle_list = obstacle_list
         self.reset()
 

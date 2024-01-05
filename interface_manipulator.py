@@ -153,6 +153,9 @@ class Interface:
 
         self.u_ref = np.zeros((traj_length, 3))
 
+    def changePoseTarget(self, pose_target):
+        self.pose_target = pose_target
+        self.globalPlanManipulator()
 
     def checkFinish1D(self):
         '''

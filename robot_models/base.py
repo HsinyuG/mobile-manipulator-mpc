@@ -10,8 +10,9 @@ class Base:
         self.base_width = 0.52 # estimated in simulation
           
     def base_radius(self):
-        base_radius = math.sqrt((self.base_length / 2.)**2 + (self.base_width / 2.) ** 2)
-        return base_radius
+        # base_radius = math.sqrt((self.base_length / 2.)**2 + (self.base_width / 2.) ** 2)
+        # return base_radius
+        return 0.4
     
     def f_kinematics(self, x, u):
         # TODO: assert x.type == u.type == casadi variable
