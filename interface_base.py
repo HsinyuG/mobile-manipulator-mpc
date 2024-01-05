@@ -199,10 +199,12 @@ class Interface:
             # (abs(self.command[0,1] - self.u_ref[-1, 1]) <= 1e-2)
             self.task_flag = 'approach'
             self.controller.setWeight(
-                P = np.diag([5e2, 5e2, 5e2, 0, 0, 1.]), # 5e2 1
-                Q = np.diag([5e2, 5e2, 5e2, 0, 0, 1.]),
+                P = np.diag([5, 5, 5, 0, 0, 1.]), # 5e2 1
+                Q = np.diag([5, 5, 5, 0, 0, 1.]),
                 # R = np.diag([0, 0])
             )
+            N = self.controller.N
+            self.controller.opti.subject_to(self.controller.X[N, :] == self.controller.X_ref[N, :])
 
         threshold = 0.01
         if (abs(self.current_state[0] - self.traj_ref[-1, 0]) <= threshold) and \
