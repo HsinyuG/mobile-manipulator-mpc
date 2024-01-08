@@ -16,9 +16,9 @@ dt = 0.1
 N = 50
 t_move = 5 # desired completion time, consider v_max = 2m/s
 t_manipulate = 2
-base_x_start = np.array([0., 0., ca.pi/4, 0., 0., 0.])  # ca.pi/4   
-joint_x_start = np.array([0, 0, 0])
-global_pose_target = np.array([5.4243, 5.4243, 0.606+0.333+0.0, ca.pi/4])
+base_x_start = np.array([0., 0., ca.pi/4, 0., 0., 0.])  # ca.pi/4
+joint_x_start = np.array([0, -3, 0]) # 0 0 0
+global_pose_target = np.array([5.4243, 5.4243, 0.606+0.333+0.5, ca.pi/4])
 
 obstacle_list = [
     Obstacles(2.5, 3.0, 0.6),

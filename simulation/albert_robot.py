@@ -15,10 +15,10 @@ from simulation.obstacles import (
 )
 
 def setup_environment(
-        render=False, 
-        reconfigure_camera=False, 
-        goal=True, 
-        obstacles=True, 
+        render=False,
+        reconfigure_camera=False,
+        goal=True,
+        obstacles=True,
         mode='vel',
         initial_state=None,
         dt=0.01,
@@ -39,7 +39,7 @@ def setup_environment(
         "urdf-env-v0",
         dt=dt, robots=robots, render=render
     )
-    
+
     ob = env.reset(
         pos = initial_state # [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5]
     )
@@ -53,10 +53,10 @@ def setup_environment(
         env.add_obstacle(static_cylinder_3)
         # env.add_obstacle(static_cylinder_4)
         env.add_obstacle(static_cylinder_5)
-    
+
     if reconfigure_camera:
-        env.reconfigure_camera(4.0, 180.0, -90.01, (5, 5.0, 0)) # -90.00 not working!
-    
+        env.reconfigure_camera(4.0, 180.0, -90.01, (0, 0.0, 0)) # -90.00 not working!
+
     return env, ob
 
 

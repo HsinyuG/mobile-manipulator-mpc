@@ -2,6 +2,8 @@ from robot_models import mobile_manipulator
 
 import casadi as ca
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('TkAgg')
 import numpy as np
 import tqdm
 import copy
@@ -11,9 +13,9 @@ import simulation.albert_robot as sim
 class Interface:
     def __init__(self, dt, t_move, t_manipulate, base_x_start, joint_x_start, global_pose_target, controller_base, controller_manipulator, physical_sim=False):
         '''
-        TODO: 
+        TODO:
         1. assign values
-        2. compute global reference trajectory 
+        2. compute global reference trajectory
         '''
         self.dt = dt
         self.desired_t_move = t_move
@@ -54,16 +56,16 @@ class Interface:
             self.idx_base = np.array([0,1,2])
             init_state[self.idx_base] = self.x_start[:len(self.idx_base)]
             init_state[self.idx_3dof] = self.x_start[-len(self.idx_3dof):]
-            self.env, self.ob = sim.setup_environment(render=True, reconfigure_camera=True, obstacles=True, mode='vel',\
-                initial_state=init_state, dt=self.sim_dt) 
-                
+            self.env, self.ob = sim.setup_environment(render=True, reconfigure_camera=False, obstacles=True, mode='vel',\
+                initial_state=init_state, dt=self.sim_dt)
+
             self.vel_command_base = np.zeros(2) # V and omega, integrated by dV and dw command and used by simulation
 
         self.globalPlan2D()
 
     def run(self, ):
         '''
-        TODO: 
+        TODO:
         while(not end)
             1 call observationCallback to get current state (or its estimation)
             2 check if we finish the task or need to change the task
@@ -79,9 +81,9 @@ class Interface:
         while(self.is_active):
             self.pseudoTimer()
 
-    
+
     def pseudoTimer(self):
-        """ 
+        """
         This function acts as a timer, synchronized with the simulation time.
         No need to acquire sim time because gym won't update unless step() is called
         """
@@ -95,13 +97,13 @@ class Interface:
         if self.timer_counter == int(self.dt / self.sim_dt):
             self.timer_counter = 0
 
-        
+
     def timerCallback(self):
         self.mpc_step_counter += 1
         print(self.mpc_step_counter, end=': ')
 
         # step 1
-        if self.physical_sim is True: 
+        if self.physical_sim is True:
             self.observationCallback()
         print(self.current_state)
         if self.task_flag == 'manipulate':
@@ -110,15 +112,15 @@ class Interface:
             self.manipulator_pose_log.append(copy.deepcopy(self.current_joints_pose))
         else:
             self.base_x_log.append(copy.deepcopy(self.current_state))
-        
+
 
         # step 2, change state machine, completely shit code, too tired to purify it
         if self.task_flag == 'move' or self.task_flag == 'approach':
             self.checkFinish2D()
-        if self.task_flag == 'move finish': 
+        if self.task_flag == 'move finish':
             # self.is_active = False # can be calling another global planner
             # return
-            
+
             self.controller = self.controllers_list[1]
             assert self.current_state.shape == (6,)
             self.pose_target = np.array([
@@ -126,7 +128,11 @@ class Interface:
                 0.0,
                 self.global_pose_target[2] - (0.606+0.333) # height difference between /base_link and joint 1
             ])
-            self.current_state = self.ob['robot_0']['joint_state']['position'][self.idx_3dof]
+            try:
+                self.current_state = self.ob['robot_0']['joint_state']['position'][self.idx_3dof]
+            except:
+                self.current_state = self.ob[0]['robot_0']['joint_state']['position'][self.idx_3dof]
+
             assert self.current_state.shape == (3,)
 
             self.joint_x_log.append(copy.deepcopy(self.current_state))
@@ -152,7 +158,7 @@ class Interface:
 
         if self.task_flag == 'approach':
             self.calcLocalRefPose()
-        elif self.task_flag == 'move': 
+        elif self.task_flag == 'move':
             self.calcLocalRefTraj([0,1,2]) # base, with orientation error when finding corresponding point on global ref traj
         elif self.task_flag == 'manipulate':
             self.calcLocalRefTraj([0,1,2]) # manipulator
@@ -165,7 +171,7 @@ class Interface:
             self.base_u_log.append(copy.deepcopy(np.asarray(self.command)))
 
         # step 5
-        if self.physical_sim is True: 
+        if self.physical_sim is True:
             self.actuate()
 
         # step 6
@@ -175,8 +181,8 @@ class Interface:
 
     def globalPlan1D(self):
         '''
-        TODO: 
-        compute global reference trajectory 
+        TODO:
+        compute global reference trajectory
         '''
         traj_length = int(self.desired_t_total/self.dt)
 
@@ -188,11 +194,11 @@ class Interface:
 
         self.u_ref = np.zeros(traj_length, 1)
 
-    
+
     def globalPlan2D(self):
         '''
-        TODO: 
-        compute global reference trajectory 
+        TODO:
+        compute global reference trajectory
         '''
         traj_length = int(self.desired_t_move/self.dt)
 
@@ -236,7 +242,7 @@ class Interface:
     def globalPlan3D(self):
         traj_length = int(self.desired_t_total/self.dt)
         pose_start = np.asarray(self.controller.robot_model.forward_tranformation(self.x_start)[0]).squeeze()
-        
+
         # x, y, z, psi of end point
         self.traj_ref = np.array([
             np.linspace(pose_start[0], self.pose_target[0], int(traj_length + 1)),
@@ -263,7 +269,7 @@ class Interface:
         '''
         if (abs(self.current_state[0] - self.traj_ref[-1, 0]) <= 2) and \
             (abs(self.current_state[1] - self.traj_ref[-1, 1]) <= 2) and \
-            self.task_flag == 'move': 
+            self.task_flag == 'move':
             # (abs(self.command[0,0] - self.u_ref[-1, 0]) <= 1e-2) and \
             # (abs(self.command[0,1] - self.u_ref[-1, 1]) <= 1e-2)
             self.task_flag = 'approach'
@@ -278,7 +284,7 @@ class Interface:
         threshold = 0.1
         if (abs(self.current_state[0] - self.traj_ref[-1, 0]) <= threshold) and \
             (abs(self.current_state[1] - self.traj_ref[-1, 1]) <= threshold) and \
-            (abs(self.current_state[2] - self.traj_ref[-1, 2]) <= 10*ca.pi/180): 
+            (abs(self.current_state[2] - self.traj_ref[-1, 2]) <= 10*ca.pi/180):
             # (abs(self.command[0,0] - self.u_ref[-1, 0]) <= 1e-2) and \
             # (abs(self.command[0,1] - self.u_ref[-1, 1]) <= 1e-2)
             self.task_flag = 'move finish'
@@ -296,13 +302,13 @@ class Interface:
     def checkFinish3D(self):
         if self.task_flag == 'move':
             self.controller.R = np.diag([0.1, 0.1, 1e2, 1e2, 1e2])
-        if (ca.norm_2(self.current_joints_pose[:4] - self.pose_target) <= 1) and self.task_flag == 'move': 
+        if (ca.norm_2(self.current_joints_pose[:4] - self.pose_target) <= 1) and self.task_flag == 'move':
             # self.controller.opti.subject_to(self.controller.terminal_pose_endpoint == self.controller.X_ref[self.controller.N, :])
             # self.controller.Q = 1e5*np.diag([1, 1, 1, 1])
             # self.controller.P = 1e5*np.diag([1, 1, 1, 1])
 
             self.task_flag = 'approach'
-        
+
         if (ca.norm_2(self.current_joints_pose[:4] - self.pose_target) <= 0.1): # TODO: change W to make it 0.02
             self.task_flag = 'finish'
 
@@ -312,8 +318,8 @@ class Interface:
         - x_ref: global trajectory given in cartesian space
         - distance_index: list, the indices of distance variable in the state vector
         - different_space: if states are in joint space but reference in are in cartesian space
-        description: 
-        - compute global reference trajectory 
+        description:
+        - compute global reference trajectory
         - if the goal lies within the horizon, repeat the last reference point
         '''
         distance_index = np.asarray(distance_index)
@@ -330,7 +336,7 @@ class Interface:
                 min_distance = distance
                 min_idx = i
 
-        terminal_index = min_idx + self.controller.N + 1   # reference (N+1) states and N inputs    
+        terminal_index = min_idx + self.controller.N + 1   # reference (N+1) states and N inputs
         if terminal_index <= self.traj_ref.shape[0]:
             self.local_traj_ref = self.traj_ref[min_idx : terminal_index]
             self.local_u_ref = self.u_ref[min_idx : terminal_index-1]
@@ -347,7 +353,7 @@ class Interface:
             # print(self.local_traj_ref.shape)
             # print(self.local_u_ref.shape)
             # print(self.local_traj_ref)
-        
+
         assert self.local_traj_ref.shape[0] == self.controller.N + 1
         assert self.local_u_ref.shape[0] == self.controller.N
 
@@ -358,8 +364,8 @@ class Interface:
 
     def observationCallback(self):
         '''
-        TODO: get the state feedback in simulation, 
-        e.g. 
+        TODO: get the state feedback in simulation,
+        e.g.
         self.observation = some function from simulation
         self.current_state = somehow(self.observation)
         '''
@@ -376,7 +382,7 @@ class Interface:
                 self.ob['robot_0']['joint_state']['velocity'][self.idx_base],
                 self.ob['robot_0']['joint_state']['position'][self.idx_3dof]
             ])
-        
+
         if self.task_flag != 'manipulate':
             self.current_state = self.current_state[:6]
         else:
@@ -386,7 +392,7 @@ class Interface:
     def actuateBase(self):
         '''
         TODO: use the return of mpc.solve() to set commands in simulation
-        e.g. 
+        e.g.
         some function from simulation(self.command)
         '''
         if not self.physical_sim: return
@@ -417,7 +423,7 @@ class Interface:
         else:
             self.vel_command_base += self.sim_dt * self.command
             action[idx_base] = self.vel_command_base
-        
+
         self.ob = sim.run_step(self.env, action)
 
     def plot1D(self):
@@ -448,7 +454,7 @@ class Interface:
         plt.plot(t[:self.traj_ref.shape[0]], self.traj_ref[:, 0])
         plt.xlabel('Time Step')
         plt.ylabel('p ref')
-        plt.grid()        
+        plt.grid()
 
         plt.show()
 
@@ -483,7 +489,7 @@ class Interface:
 
         idx_offset = 1 if is_mobile else 0
         # x y z
-        plt.figure()   
+        plt.figure()
         plt.subplot(131)
         plt.plot(t, self.manipulator_pose_log[:, 0], label='x')
         plt.plot(t, self.manipulator_pose_log[:, 1], label='y')
@@ -501,7 +507,7 @@ class Interface:
         plt.xlabel('Time Step')
         plt.ylabel('joint 2')
         plt.legend()
-        plt.grid()       
+        plt.grid()
 
         plt.subplot(133)
         plt.plot(t, self.manipulator_pose_log[:, 6+idx_offset], label='x')
@@ -510,7 +516,7 @@ class Interface:
         plt.xlabel('Time Step')
         plt.ylabel('joint 3')
         plt.legend()
-        plt.grid()   
+        plt.grid()
 
         plt.show(block=True)
 
@@ -560,7 +566,7 @@ class Interface:
         plt.xlabel('Time Step')
         plt.ylabel('dpsi')
         plt.grid()
-        
+
         # dV, dw
         plt.figure()
         plt.subplot(211)
@@ -574,7 +580,7 @@ class Interface:
         plt.xlabel('Time Step')
         plt.ylabel('w_dot')
         plt.grid()
-        
+
         # obs
         plt.figure()
         plt.plot(self.base_x_log[:, 0], self.base_x_log[:, 1], label = 'actual postion')
