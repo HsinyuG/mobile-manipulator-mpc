@@ -49,3 +49,12 @@ movable_box1_dict = {
     'movable': True,
 }
 movable_box1 = BoxObstacle(name="movable_box", content_dict=movable_box1_dict)
+
+movable_sphere2_dict = {
+    "type": "sphere",
+    "geometry": {"position": [0.65, 0, 0.3+0.606+0.333], "radius": 0.02},
+    "rgba": [0.3, 0.5, 0.6, 1.0],
+    'movable': False,
+}
+movable_sphere2 = SphereObstacle(name="simpleSphere", content_dict=movable_sphere2_dict)
+

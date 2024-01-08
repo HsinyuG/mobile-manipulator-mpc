@@ -7,14 +7,15 @@ from simulation.obstacles import (
     movable_sphere1,
     static_box1,
     movable_box1,
-    static_cylinder
+    static_cylinder,
+    # movable_sphere2
 )
 
 def setup_environment(
-        render=False, 
-        reconfigure_camera=False, 
-        goal=True, 
-        obstacles=True, 
+        render=False,
+        reconfigure_camera=False,
+        goal=True,
+        obstacles=True,
         mode='vel',
         initial_state=None,
         dt=0.01
@@ -35,7 +36,7 @@ def setup_environment(
         "urdf-env-v0",
         dt=dt, robots=robots, render=render
     )
-    
+
     ob = env.reset(
         pos = initial_state # [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5]
     )
@@ -46,10 +47,11 @@ def setup_environment(
         env.add_obstacle(static_box1)
         env.add_obstacle(movable_box1)
         env.add_obstacle(static_cylinder)
-    
+        # env.add_obstacle(movable_sphere2)
+
     if reconfigure_camera:
-        env.reconfigure_camera(4.0, 0.0, -90.01, (0, -2.0, 0))
-    
+        env.reconfigure_camera(4.0, -90, 00.01, (2.4, 0, 1.4))
+
     return env, ob
 
 

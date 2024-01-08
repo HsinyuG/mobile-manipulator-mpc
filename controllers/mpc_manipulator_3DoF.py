@@ -1,28 +1,8 @@
 import casadi as ca
 import numpy as np
+from casadi import *
 
-
-def obstacle_avoidance_constraints(opti, obstacle_point, positions, normals, M=1e6, eps=1e-3):
-    # This function creates slack variables and constraints for obstacle avoidance
-    # and returns them to be added to the optimization problem.
-
-    obstacle_constraints = []
-    penalty = 0
-
-    for pos in positions:
-        for n in normals:
-            # Create a slack variable for each obstacle avoidance condition
-            slack = opti.variable()
-            opti.subject_to(slack >= 0)
-
-            q = obstacle_point - pos
-            obstacle_constraints.append(opti.bounded(eps, ca.mtimes(n.T, q) + M * slack, ca.inf))
-
-            # Add the slack penalty to the penalty term
-            penalty += M * slack
-
-    return obstacle_constraints, penalty
-
+M = 1e6
 
 class MPCManipulator3DoF:
     def __init__(self,
@@ -49,6 +29,8 @@ class MPCManipulator3DoF:
         self.f_dynamics = robot.f_kinematics
         self.robot_model = robot
         self.is_cartesian_ref = False # TODO: use as parameter, when true the reference is given in cartesian space
+        self.normals = [np.array([[0, 0, -1]]), np.array([[1, 0, 0]])]
+        self.obstacle_point = np.array([[0.25, 0, 0.3]])
         self.reset()
 
     def reset(self):
@@ -72,55 +54,51 @@ class MPCManipulator3DoF:
         self.x_guess = None
         self.u_latest = None
 
-        cost = 0
+        self.cost = 0
         # Define constraints and cost
         for k in range(self.N):
             self.opti.subject_to(self.X[k+1, :] == self.f_dynamics(self.X[k, :], self.U[k, :]))
 
-            x_endpoint, x_joint_2, x_joint_3 = self.robot_model.forward_tranformation(self.X[k, :])
+            self.x_endpoint, self.x_joint_2, self.x_joint_3 = self.robot_model.forward_tranformation(self.X[k, :])
             if self.is_cartesian_ref:
-                state_error = x_endpoint - self.X_ref[k, :]
+                state_error = self.x_endpoint - self.X_ref[k, :]
             else: state_error = self.X[k, :] - self.X_ref[k, :]
 
             control_error = self.U[k, :] - self.U_ref[k, :]
             control_change = self.U[k, :] - self.U_last[k, :]
 
-            cost += ca.mtimes([state_error, self.Q, state_error.T])
-            cost += ca.mtimes([control_error, self.R, control_error.T])
-            cost += ca.mtimes([control_change, self.M, control_change.T])
+            self.cost += ca.mtimes([state_error, self.Q, state_error.T])
+            self.cost += ca.mtimes([control_error, self.R, control_error.T])
+            self.cost += ca.mtimes([control_change, self.M, control_change.T])
 
             self.opti.subject_to(self.opti.bounded(self.dqlim[0], self.U[k, :], self.dqlim[1])) # dq constraint
             self.opti.subject_to(self.opti.bounded(self.qlim[0], self.X[k, :], self.qlim[1])) # q constraint
             self.opti.subject_to(self.opti.bounded(self.ddqlim[0], control_change, self.ddqlim[1]))
 
+            self.positions = [self.x_joint_2 / 2, self.x_joint_2, (self.x_joint_2 + self.x_joint_3) / 2, self.x_joint_3,
+                              (self.x_joint_3 + self.x_endpoint) / 2, self.x_endpoint]
 
+            self.obstacle_avoidance_constraints_convex()
+            self.cost += self.slack**2 * M
 
-            obstacle_point = np.array([[0.3, 0, 0.3]])
-            normals = [np.array([0, 0, -1]), np.array([1, 0, 0])]
-            positions = [x_joint_2/2, x_joint_2, (x_joint_2 + x_joint_3)/2 , x_joint_3,
-                         (x_joint_3 + x_endpoint)/2, x_endpoint]
-
-            # Get the constraints
-            obstacle_constraints, obstacle_penalty = obstacle_avoidance_constraints(
-                self.opti, obstacle_point, positions, normals
-            )
-            for constraint in obstacle_constraints:
-                self.opti.subject_to(constraint)
-
-            cost += obstacle_penalty
-
-        x_endpoint_terminal, x_joint_2_terminal, x_joint_3_terminal = self.robot_model.forward_tranformation(
+        self.x_endpoint_terminal, self.x_joint_2_terminal, self.x_joint_3_terminal = \
+            self.robot_model.forward_tranformation(
             self.X[self.N, :])
         if self.is_cartesian_ref:
-            terminal_state_error = x_endpoint_terminal - self.X_ref[self.N, :]
+            terminal_state_error = self.x_endpoint_terminal - self.X_ref[self.N, :]
         else: terminal_state_error = self.X[self.N, :] - self.X_ref[self.N, :]
         # TODO: xyz constraints
-        cost += ca.mtimes([terminal_state_error, self.P, terminal_state_error.T])
+        self.cost += ca.mtimes([terminal_state_error, self.P, terminal_state_error.T])
 
-        self.opti.minimize(cost)
+        self.opti.minimize(self.cost)
 
         # Initial state as constraints
         self.opti.subject_to(self.X[0, :] == self.X_init)
+        self.positions = [self.x_joint_2_terminal / 2, self.x_joint_2_terminal,
+                                   (self.x_joint_2_terminal + self.x_joint_3_terminal) / 2, self.x_joint_3_terminal,
+                          (self.x_joint_3_terminal + self.x_endpoint_terminal) / 2, self.x_endpoint_terminal]
+        self.obstacle_avoidance_constraints_convex()
+        self.cost += self.slack ** 2 * M
 
         # Set solver options
         # opts = {'ipopt.print_level': 0, 'print_time': 0, 'ipopt.tol': 1e-3}
@@ -154,7 +132,28 @@ class MPCManipulator3DoF:
 
         self.opti.set_value(self.X_init, x_init)
 
-        sol = self.opti.solve()
+        # sol = self.opti.solve()
+
+        # Before the solve call
+        self.opti.callback(lambda i: print("Iteration:", i, "Cost:", self.opti.debug.value(self.cost)))
+
+        # Solve the problem
+        try:
+            sol = self.opti.solve()
+            for i in range(len(self.positions)):
+                print("Position", i, ":", self.opti.debug.value(self.positions[i]))
+                print("Constraint 1:", self.opti.debug.value(self.constr[i, 0]))
+                print("Constraint 2:", self.opti.debug.value(self.constr[i, 1]))
+        except RuntimeError as e:
+            print("Optimization failed:", str(e))
+            # Inspect the values of variables and constraints at failure
+            for i in range(len(self.positions)):
+                print("Position", i, ":", self.opti.debug.value(self.positions[i]))
+                print("Constraint 1:", self.opti.debug.value(self.constr[i, 0]))
+                print("Constraint 2:", self.opti.debug.value(self.constr[i, 1]))
+            raise
+        print("\n")
+
 
         # obtain the initial guess of solutions of the next optimization problem
         self.x_guess = sol.value(self.X)
@@ -163,5 +162,37 @@ class MPCManipulator3DoF:
         # TODO: replace with u_latest
         return self.u_latest[0, :]
 
+    def obstacle_avoidance_constraints_convex(self):
+        # self.constr = self.opti.variable(1, 2)
+        #
+        # self.agent2obs = self.obstacle_point - self.positions[5]
+        #
+        # # Initialize the first constraint
+        # self.constr[0, 0] = ca.mtimes(self.normals[0], self.agent2obs.T)
+        # self.constr[0, 1] = ca.mtimes(self.normals[1], self.agent2obs.T)
+        #
+        # # Select the larger constraint using if_else
+        # max_constr = ca.if_else(self.constr[0, 0] > self.constr[0, 1], self.constr[0, 0], self.constr[0, 1])
+        #
+        # # Add the maximum constraint to the optimization problem
+        # self.opti.subject_to(self.constr[0, 1] > 0)
+
+        self.constr = self.opti.variable(6, 2)
+        self.slack = self.opti.variable()
+        self.opti.subject_to(self.slack >= 0)
+
+        for i in range(len(self.positions)):
+            # Compute vector from position to obstacle point
+            self.agent2obs = self.obstacle_point - self.positions[i]
+
+            # Initialize the first constraint
+            self.constr[i, 0] = ca.mtimes(self.normals[0], self.agent2obs.T)
+            self.constr[i, 1] = ca.mtimes(self.normals[1], self.agent2obs.T)
+
+            # Select the larger constraint using if_else
+            max_constr = ca.if_else(self.constr[i, 0] > self.constr[i, 1], self.constr[i, 0], self.constr[i, 1])
+
+            # Add the maximum constraint to the optimization problem
+            self.opti.subject_to(max_constr > -self.slack)
 
 

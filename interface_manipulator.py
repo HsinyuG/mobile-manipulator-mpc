@@ -36,7 +36,7 @@ class Interface:
             init_state = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
             idx_3dof = np.array([4,6,8])
             init_state[idx_3dof] = self.x_start
-            self.env, self.ob = sim.setup_environment(render=True, reconfigure_camera=False, obstacles=True, mode='vel',\
+            self.env, self.ob = sim.setup_environment(render=True, reconfigure_camera=True, obstacles=True, mode='vel',\
                 initial_state=init_state, dt=self.sim_dt)
                 # shape=(12,), [x, y, yaw, joint1~7, left finger, right finger] TODO: check this
 
