@@ -48,7 +48,7 @@ class MPCWholeBody:
     def angleDiff(self, a, b):
         """
         input angle from any range, output a-b converted to [-pi, pi)
-        in this program a and b are equivalent because we use the squared error
+        returns the closest result of a-b, e.g. -3.14, 3.14 => 0.003 
         """
         a = ca.fmod((a + ca.pi), (2*ca.pi)) - ca.pi # convert to [-pi.pi)
         b = ca.fmod((b + ca.pi), (2*ca.pi)) - ca.pi
@@ -70,6 +70,7 @@ class MPCWholeBody:
                 )
             )
         )
+
 
         return angle_diff
 
@@ -138,11 +139,12 @@ class MPCWholeBody:
                 # pose_endpoint, pos_joint_2, pos_joint_3 = self.robot_model.forward_tranformation(self.X[k, :])
                 # state_error = pose_endpoint - self.X_ref[k, :]
             # else:
-            state_error = ca.horzcat(
-                self.X[k, :2] - self.X_ref[k, :2],
-                self.angleDiff(self.X[k, 2], self.X_ref[k, 2]),
-                self.X[k, 3:] - self.X_ref[k, 3:]
-            )
+                # state_error = ca.horzcat(
+                #     self.X[k, :2] - self.X_ref[k, :2],
+                #     self.angleDiff(self.X[k, 2], self.X_ref[k, 2]),
+                #     self.X[k, 3:] - self.X_ref[k, 3:]
+                # )
+            state_error = self.X[k, :] - self.X_ref[k, :]
 
             # control error
             control_error = self.U[k, :] - self.U_ref[k, :]
@@ -170,11 +172,12 @@ class MPCWholeBody:
             # self.terminal_pose_endpoint, terminal_pos_joint_2, terminal_pos_joint_3 = self.robot_model.forward_tranformation(self.X[self.N, :])
             # terminal_state_error =  self.terminal_pose_endpoint - self.X_ref[self.N, :]
         # else:
-        terminal_state_error =  ca.horzcat(
-            self.X[self.N, :2] - self.X_ref[self.N, :2],
-            self.angleDiff(self.X[self.N, 2], self.X_ref[self.N, 2]),
-            self.X[self.N, 3:] - self.X_ref[self.N, 3:]
-        )
+            # terminal_state_error =  ca.horzcat(
+            #     self.X[self.N, :2] - self.X_ref[self.N, :2],
+            #     self.angleDiff(self.X[self.N, 2], self.X_ref[self.N, 2]),
+            #     self.X[self.N, 3:] - self.X_ref[self.N, 3:]
+            # )
+        terminal_state_error =  self.X[self.N, :] - self.X_ref[self.N, :]
 
         cost += ca.mtimes([terminal_state_error, self.P, terminal_state_error.T])
 
@@ -189,6 +192,9 @@ class MPCWholeBody:
         # terminal state onstacles 3D 
         # TODO
         
+        # debug
+        self.cost = cost 
+        # end debug
         self.opti.minimize(cost)
 
         # Set solver options
@@ -214,7 +220,8 @@ class MPCWholeBody:
         if self.u_latest is None:
             self.u_latest = np.zeros((self.N, 5))
         
-        self.opti.set_initial(self.X, self.x_guess)
+        # self.opti.set_initial(self.X, self.x_guess)
+        self.opti.set_initial(self.X, np.ones((self.N+1, 9)) * x_init)
         self.opti.set_initial(self.U, self.u_latest)
         self.opti.set_initial(self.s, np.zeros((self.N+1, 1)))
 
@@ -229,6 +236,7 @@ class MPCWholeBody:
         try:
             sol = self.opti.solve()
             # s = self.opti.debug.value(self.s) # for debug
+            print("cost: ", sol.value(self.cost))
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
             print("here should be a debug breakpoint")

@@ -65,7 +65,7 @@ static_cylinder_dict_5 = {
     "type": "cylinder",
     "movable": False,
     "geometry": {
-        "position": [5.4243, 5.4243, 0.0], # [3.0, -2.5, 0.0],
+        "position": [5-0.6, 5., 0.0], # [5.4243, 5.4243, 0.0]
         "radius": 0.1,
         "height": 0.5,
     },

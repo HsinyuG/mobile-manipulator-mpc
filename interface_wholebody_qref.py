@@ -162,9 +162,8 @@ class Interface:
                 self.controller.opti.subject_to(self.controller.X[N, :2] == self.controller.X_ref[N, :2])
             
             
-            threshold = 0.02
-            if (ca.norm_2(self.current_state[0:2] - self.traj_ref[-1, 0:2]) <= threshold) and \
-                (abs(self.current_state[2] - self.traj_ref[-1, 2]) <= ca.inf): # 10*ca.pi/180):
+            threshold = 0.2
+            if (ca.norm_2(self.current_state[0:2] - self.traj_ref[-1, 0:2]) <= threshold):
                 # (abs(self.command[0,0] - self.u_ref[-1, 0]) <= 1e-2) and \
                 # (abs(self.command[0,1] - self.u_ref[-1, 1]) <= 1e-2)
                 self.task_flag = 'rotate'
@@ -172,6 +171,12 @@ class Interface:
                     P = np.diag([5, 5, 5, 0, 0, 1, 1, 1, 1]),
                     Q = np.diag([5, 5, 5, 0, 0, 1, 1, 1, 1]),
                     # R = np.diag([0.1, 0.1, 0.0, 0.0, 0.0])
+
+                    # P = np.diag([0, 0, 5, 0, 0, 0, 0, 0, 0]),
+                    # Q = np.diag([0, 0, 5, 0, 0, 0, 0, 0, 0]),
+                    # R = np.diag([0.0, 0.0, 0.0, 0.0, 0.0]),
+                    # S = np.diag([0]),
+                    # W = np.diag([0,0,0,0,0])
                 )
 
             else: 
@@ -180,9 +185,15 @@ class Interface:
         ## check rotate finish
         # TODO: set weight large dV penalty and V penalty, large psi penalty
         if self.task_flag == 'rotate':
-            if (abs(self.current_state[2] - self.traj_ref[-1, 2]) <= 2*ca.pi/180): 
+            threshold = 0.01
+            if (abs(self.controller.angleDiff(self.current_state[2], self.traj_ref[-1, 2])) <= 2*ca.pi/180) and \
+                (ca.norm_2(self.current_state[0:2] - self.traj_ref[-1, 0:2]) <= threshold): 
                 self.task_flag = 'move finish' # actuate function will send 0 vel; actual may perform better because we cannot brake in sim
             else: self.calcLocalRefPose()
+
+        ## adjust final location
+        # if self.task_flag == 'adjust':
+
 
         ## when move finish, change reference q value
         if self.task_flag == 'move finish' and np.isclose(self.current_state[3:6], 0, atol=1e-04).all():
@@ -201,8 +212,9 @@ class Interface:
 
         ## check manipulate finish
         if self.task_flag == "manipulate":
+            threshold = 0.01
             # maybe need to use x y z psi of endpoint as reference to move the base
-            if (ca.norm_2(self.current_joints_pose[:3] - self.global_pose_target[:3]) <= 0.3): # when psi goal=the psi it finish move, <= 0.07
+            if (ca.norm_2(self.current_joints_pose[:3] - self.global_pose_target[:3]) <= threshold): # when psi goal=the psi it finish move, <= 0.07
                 self.task_flag = 'manipulate finish'
                 robot_status = False
             else:
@@ -383,6 +395,16 @@ class Interface:
         self.local_traj_ref = np.tile(self.traj_ref[-1], (self.controller.N + 1, 1))
         self.local_u_ref = np.tile(self.u_ref[-1], (self.controller.N, 1))
 
+        """ 
+        to avoid angle ref is -3.14 and current angle is 3.14, in this case we can use angle
+        diff function in solver, but this makes it too difficult to solve
+        """
+        psi_ref = self.traj_ref[-1, 2]
+        current_psi = self.current_state[2]
+        continuous_psi_ref = current_psi + self.controller.angleDiff(psi_ref, current_psi)
+        self.local_traj_ref[:, 2] = continuous_psi_ref
+
+
     def observationCallback(self):
         '''
         TODO: get the state feedback in simulation, 
@@ -403,6 +425,10 @@ class Interface:
                 self.ob['robot_0']['joint_state']['velocity'][self.idx_base],
                 self.ob['robot_0']['joint_state']['position'][self.idx_3dof]
             ])
+
+        offset = -0.157 # base center is (-0.157, 0, 0) with reference to geometric center location which is in self.ob 
+        self.current_state[0] += offset * ca.cos(self.current_state[2])
+        self.current_state[1] += offset * ca.sin(self.current_state[2])
 
 
     def actuateBase(self):
