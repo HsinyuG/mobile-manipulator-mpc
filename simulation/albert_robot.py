@@ -31,7 +31,7 @@ def setup_environment(
             castor_wheels=["rotacastor_right_joint", "rotacastor_left_joint"],
             wheel_radius = 0.08,
             wheel_distance = 0.494,
-            spawn_rotation = np.pi/2, # Change initial direction to face +x; another bug in albert model
+            spawn_rotation = -np.pi/2, # Change initial direction to face +x; another bug in albert model
             # facing_direction = '-y', # useless property, a bug of simulation
         ),
     ]
@@ -55,7 +55,7 @@ def setup_environment(
         env.add_obstacle(static_cylinder_5)
 
     if reconfigure_camera:
-        env.reconfigure_camera(4.0, 180.0, -90.01, (0, 0.0, 0)) # -90.00 not working!
+        env.reconfigure_camera(4.0, 180.0, -90.01, (5, 5.0, 0)) # -90.00 not working!
 
     return env, ob
 
