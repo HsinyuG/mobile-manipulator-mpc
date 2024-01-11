@@ -47,7 +47,7 @@ class Interface:
         if self.physical_sim:
 
             # shape=(12,), [x, y, yaw, joint1~7, left finger, right finger]
-            init_state = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+            init_state = np.array([0.0, 0.0, 0.0, ca.pi, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
             self.idx_3dof = np.array([4,6,8])
             self.idx_base = np.array([0,1,2])
@@ -186,7 +186,7 @@ class Interface:
         # TODO: set weight large dV penalty and V penalty, large psi penalty
         if self.task_flag == 'rotate':
             threshold = 0.01
-            if (abs(self.controller.angleDiff(self.current_state[2], self.traj_ref[-1, 2])) <= 2*ca.pi/180) and \
+            if (abs(self.controller.angleDiff(self.current_state[2], self.traj_ref[-1, 2])) <= 0.5*ca.pi/180) and \
                 (ca.norm_2(self.current_state[0:2] - self.traj_ref[-1, 0:2]) <= threshold): 
                 self.task_flag = 'move finish' # actuate function will send 0 vel; actual may perform better because we cannot brake in sim
             else: self.calcLocalRefPose()
@@ -196,11 +196,11 @@ class Interface:
 
 
         ## when move finish, change reference q value
-        if self.task_flag == 'move finish' and np.isclose(self.current_state[3:6], 0, atol=1e-04).all():
+        if self.task_flag == 'move finish':# and np.isclose(self.current_state[3:6], 0, atol=1e-04).all():
             self.task_flag = 'manipulate'
             self.local_pose_target = np.array([
-                np.sqrt((self.global_pose_target[0] - self.current_state[0])**2 + (self.global_pose_target[1] - self.current_state[1])**2) - 0.007,
-                0.0,
+                np.sqrt((self.global_pose_target[0] - self.current_state[0])**2 + (self.global_pose_target[1] - self.current_state[1])**2) + 0.007, # x difference between base link and joint 1
+                0.0, # no DoF here in our manipulator
                 self.global_pose_target[2] - (0.606+0.333) # height difference between /base_link and joint 1
             ])
             self.globalPlanManipulator() 
@@ -426,7 +426,12 @@ class Interface:
                 self.ob['robot_0']['joint_state']['position'][self.idx_3dof]
             ])
 
-        offset = -0.157 # base center is (-0.157, 0, 0) with reference to geometric center location which is in self.ob 
+        # real_psi = self.current_state[2] + ca.pi
+        # self.current_state[2] = ca.fmod((real_psi + ca.pi), (2*ca.pi)) - ca.pi # convert to [-pi, pi)
+        self.current_state[3] *= -1
+        self.current_state[4] *= -1
+
+        offset = 0.157 # base center is (0.157, 0, 0) with reference to geometric center location which is in self.ob 
         self.current_state[0] += offset * ca.cos(self.current_state[2])
         self.current_state[1] += offset * ca.sin(self.current_state[2])
 
@@ -460,9 +465,10 @@ class Interface:
         # shape=(11,), [v, w, joint1~7, left finger, right finger]
         idx_3dof = np.array([3,5,7]) # different from the self.idx_3dof, which is in state and observation
         idx_base = np.array([0,1]) # different from the self.idx_base, which is in state and observation
-        self.vel_command_base += self.sim_dt * self.command[0:2]
-        if self.task_flag in ('move', 'rotate', 'approach'): 
-            action[idx_base] = self.vel_command_base
+        self.vel_command_base += self.sim_dt * self.command[0:2] * np.array([-1,1]) # V's direction is reversed in sim
+        # if self.task_flag in ('move', 'rotate', 'approach'): 
+        action[idx_base] = self.vel_command_base
+        # else: brake
         action[idx_3dof] = self.command[2:]
         self.ob = sim.run_step(self.env, action)
 
@@ -624,7 +630,8 @@ class Interface:
         # obs
         plt.figure()
         plt.plot(self.x_log[:, 0], self.x_log[:, 1],label = 'actual postion')
-        plt.plot(self.traj_ref[:, 0], self.traj_ref[:, 1],label = 'reference position')
+        ref_line = np.linspace(self.x_start[:2], self.x_target[:2])
+        plt.plot(ref_line[:, 0], ref_line[:, 1], label = 'reference position')
         for obs in self.controller.obstacle_list:
             circle = plt.Circle((obs.x, obs.y), obs.radius, color='green', fill=False)
             plt.gca().add_artist(circle)
