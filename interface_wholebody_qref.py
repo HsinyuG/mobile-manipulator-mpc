@@ -35,6 +35,7 @@ class Interface:
         self.physical_sim = physical_sim
 
         self.manipulator_pose_log = []
+        self.endpoint_relative_pos_log = []
         self.x_log = []
         self.u_log = []
 
@@ -108,6 +109,10 @@ class Interface:
         self.x_log.append(copy.deepcopy(self.current_state))
         self.current_joints_pose = np.asarray(ca.horzcat(*self.controller.robot_model.forward_tranformation(self.current_state))).squeeze()
         self.manipulator_pose_log.append(copy.deepcopy(self.current_joints_pose))
+
+        self.endpoint_relative_pos_log.append(np.asarray(
+            self.controller.robot_model.manipulator.forward_tranformation(self.current_state[-3:])[0]
+        ).squeeze())
 
         # step 2
         # self.checkFinish3D()
@@ -564,7 +569,7 @@ class Interface:
         plt.legend()
         plt.grid()   
 
-        plt.show(block=True)
+        plt.show(block=False)
 
 
     def plot2D(self):
@@ -643,6 +648,48 @@ class Interface:
         plt.show(block=False)
 
 
+    def plotEndpoint(self):
+        # Extracting the x and z coordinates for plotting (assuming y is constant)
+        x_coords = [pos[0] for pos in self.endpoint_relative_pos_log]
+        z_coords = [pos[2] for pos in self.endpoint_relative_pos_log]
+
+        # Plotting the updated trajectory and the obstacle
+        plt.figure(figsize=(10, 10))
+        plt.plot(x_coords, z_coords, marker='o', color='blue', linewidth=2,
+                 label='Endpoint Trajectory')  # Thicker trajectory
+        plt.scatter(self.local_pose_target[0], self.local_pose_target[2], color='red', marker='^', s=100,
+                    label='Target')  # More visible target color
+
+        # task specific code
+        self.obstacle_point_manipulation = np.array([0.4, 0, 0.3])
+        if self.obstacle_point_manipulation.size > 0:
+            obstacle_point = self.obstacle_point_manipulation + np.array([0.03, 0, - 0.03])
+            obstacle_size = 0.3
+
+            # Creating the corners of the obstacle box
+            obstacle_corners = [
+                obstacle_point,
+                obstacle_point + np.array([obstacle_size, 0, 0]),
+                obstacle_point + np.array([obstacle_size, 0, - obstacle_size]),
+                obstacle_point + np.array([0, 0, - obstacle_size]),
+                obstacle_point  # to close the rectangle
+            ]
+
+            # Extracting x and z coordinates of the obstacle
+            obstacle_x = [corner[0] for corner in obstacle_corners]
+            obstacle_z = [corner[2] for corner in obstacle_corners]
+            plt.fill(obstacle_x, obstacle_z, color='gray', alpha=0.5, label='Obstacle')  # Obstacle representation
+
+        plt.title('2D Trajectory with Obstacle and Pose Target')
+        plt.xlabel('X Coordinate')
+        plt.ylabel('Z Coordinate')
+        plt.axis('equal')
+        plt.legend()
+        plt.grid(True)
+        plt.show(block=True)
+
+
     def plot3D(self):
         self.plot2D()
         self.plotManipulator(is_mobile=True)
+        self.plotEndpoint()

@@ -2,7 +2,7 @@ from sympy import symbols, Eq, solve, sin, cos # not used because closed form so
 import casadi as ca
 import numpy as np
 
-target_position = np.array([0.6, 0.1])
+target_position = np.array([0.7, 0.5])
 
 # Define the symbolic variables
 q1 = ca.MX.sym('q1')

@@ -204,18 +204,19 @@ class ManipulatorPanda3DoF:
         x_q_next = ca.vertcat(x_next, q_next)
         return x_q_next
 
-# debug
+# # debug
 # toy = ManipulatorPanda3DoF(0.1)
-# print(toy.f_kinematics(
-#     # ca.vertcat(0, 0, 0), # x
-#     ca.vertcat(0, 0, 0), # q
-#     ca.vertcat(0.0, 0.0, 0) # dq
-# ))
+# # print(toy.f_kinematics(
+# #     # ca.vertcat(0, 0, 0), # x
+# #     ca.vertcat(0, 0, 0), # q
+# #     ca.vertcat(0.0, 0.0, 0) # dq
+# # ))
 
 # print(toy.forward_tranformation(
 #     # ca.vertcat([0.282888, -1.62375, 1.53274])
 #     # ca.vertcat([0.39936281, -1.43605116,  1.21150565])
-#     ca.vertcat([ 0.33722445, -1.53417834,  1.37474546])
+#     # ca.vertcat([ 0.33722445, -1.53417834,  1.37474546])
+#     ca.vertcat([0.695168, -0.467009, 2.66495])
 # )[0])
 
 '''

@@ -7,6 +7,7 @@ class MPCWholeBody:
     def __init__(self,
         robot, 
         obstacle_list,
+        obstacle_manipulation_list,
         N = 10, 
         Q = 5*np.diag([5, 5, 0, 0, 0, 1, 1, 1, 1]), # x y psi dx dy dpsi q1 q2 q3
         P = 5*np.diag([5, 5, 0, 0, 0, 1, 1, 1, 1]), 
@@ -16,7 +17,7 @@ class MPCWholeBody:
         ulim=np.array([[-2, -ca.pi, -1, -1, -1],[2, ca.pi, 1, 1, 1]]), # dV, dw, dq1, dq2, dq3
         xlim=np.array([
             [-100, -100, -ca.inf, -2, -2, -ca.pi, -ca.pi/2, -ca.pi, 0],
-            [100, 100, ca.inf, 2, 2, ca.pi, ca.pi/2, 0, ca.pi] 
+            [100, 100, ca.inf, 2, 2, ca.pi, ca.pi/2, 0, 3*ca.pi/2] 
         ]), # x, y, psi, dx, dy, dpsi, q1, q2, q3
         dulim=np.array([[-ca.inf, -ca.inf, -0.5, -0.5, -0.5], [ca.inf, ca.inf, 0.5, 0.5, 0.5]])
         ):
@@ -35,6 +36,13 @@ class MPCWholeBody:
         self.robot_model = robot
         self.base_radius = robot.base.base_radius() # member variable
         self.obstacle_list = obstacle_list
+        self.obstacle_manipulation_list = obstacle_manipulation_list
+        # self.normals = obstacle_surfaces_manipulation
+        # self.obstacle_point = obstacle_point_manipulation
+
+        self.endpoint_self_collision_radius = 0.05
+        self.obstacle_expand_dist = 0.03
+
         self.reset()
 
 
@@ -44,6 +52,42 @@ class MPCWholeBody:
         for obs in obstacle_list:
             g.append((obs.radius + self.base_radius) - ca.sqrt((x[0]-obs.x)**2 + (x[1]-obs.y)**2) + threshold) # should be <= 0
         return g # all elements should be <= 0
+
+
+    def obsAvoidConvex(self, s_index):
+        
+        # self.slack = self.opti.variable()
+        # self.opti.subject_to(self.slack >= 0)
+
+        # for i in range(len(self.manipulator_positions)):
+        #     # Compute vector from position to obstacle point
+        #     self.agent2obs = self.obstacle_point - self.manipulator_positions[i]
+
+        #     # Initialize the first constraint
+        #     self.constr[i, 0] = ca.mtimes(self.normals[0], self.agent2obs.T)
+        #     self.constr[i, 1] = ca.mtimes(self.normals[1], self.agent2obs.T)
+
+        #     # Select the larger constraint using if_else
+        #     max_constr = ca.if_else(self.constr[i, 0] > self.constr[i, 1], self.constr[i, 0], self.constr[i, 1])
+
+        #     # Add the maximum constraint to the optimization problem
+        #     self.opti.subject_to(max_constr > -self.slack)
+
+        for i in range(len(self.manipulator_positions)):
+            for j, (point, normal) in enumerate(self.obstacle_manipulation_list):
+                point = point - self.obstacle_expand_dist * normal # expand the obstacle to avoid collision, because radius of manipulator not considered
+                agent2obs = point - self.manipulator_positions[i]
+                self.constr[i, j] = ca.mtimes(normal, agent2obs.T)
+
+                if len(self.obstacle_manipulation_list) == 1: 
+                    max_constr = self.constr[i, 0]
+                elif len(self.obstacle_manipulation_list) == 2:
+                    max_constr = ca.if_else(self.constr[i, 0] > self.constr[i, 1], self.constr[i, 0], self.constr[i, 1])
+                else:
+                    max_constr = ca.mmax(self.constr[i, :])
+
+                self.opti.subject_to(-max_constr < self.s[s_index]) # should < 0
+
 
     def angleDiff(self, a, b):
         """
@@ -70,8 +114,6 @@ class MPCWholeBody:
                 )
             )
         )
-
-
         return angle_diff
 
     def setWeight(self, Q=None, R=None, P=None, S=None, W=None):
@@ -111,6 +153,8 @@ class MPCWholeBody:
         self.U = self.opti.variable(self.N, 5)      # inputs = dV, dw, dq1, dq2, dq3
         self.s = self.opti.variable(self.N+1, 1)    # slack variable = largest violation of obstacle constraints
 
+        self.constr = self.opti.variable(6, len(self.obstacle_manipulation_list))
+
         self.U_last = self.opti.parameter(self.N, 5)
         self.X_init = self.opti.parameter(1, 9)
         
@@ -134,6 +178,7 @@ class MPCWholeBody:
             
             # kinematic model
             self.opti.subject_to(self.X[k+1, :] == self.f_dynamics(self.X[k, :], self.U[k, :]))
+
             # state error
             # if pose ref:
                 # pose_endpoint, pos_joint_2, pos_joint_3 = self.robot_model.forward_tranformation(self.X[k, :])
@@ -162,10 +207,24 @@ class MPCWholeBody:
             # obstacles on ground
             for g in self.obsAvoid(self.obstacle_list, self.X[k,:]):
                 self.opti.subject_to(g <= self.s[k])
-            cost += ca.mtimes([self.s[k], self.S, self.s[k]])
+            
 
-            # onstacles 3D 
-            # TODO
+            # obstacles 3D 
+            pose_endpoint, x_joint_2, x_joint_3 = self.robot_model.forward_tranformation(self.X[k, :])
+            x_endpoint = pose_endpoint[0:3]
+
+            self.manipulator_positions = [x_joint_2 / 2, x_joint_2, (x_joint_2 + x_joint_3) / 2, x_joint_3,
+                              (x_joint_3 + x_endpoint) / 2, x_endpoint]
+
+            self.self_colli_check = [ca.horzcat(0, 0, 0), x_joint_2 / 2, x_joint_2, (x_joint_2 + x_joint_3) / 2]
+            for i in range(len(self.self_colli_check)):
+                dist = self.self_colli_check[i] - self.manipulator_positions[-1]
+                self.opti.subject_to(self.endpoint_self_collision_radius - ca.norm_2(dist) < self.s[k])
+
+            if len(self.obstacle_manipulation_list) > 0:
+                self.obsAvoidConvex(k)
+
+            cost += ca.mtimes([self.s[k], self.S, self.s[k]])
         
         # terminal state error and boundaries
         # if pose ref:
@@ -177,6 +236,7 @@ class MPCWholeBody:
             #     self.angleDiff(self.X[self.N, 2], self.X_ref[self.N, 2]),
             #     self.X[self.N, 3:] - self.X_ref[self.N, 3:]
             # )
+
         terminal_state_error =  self.X[self.N, :] - self.X_ref[self.N, :]
 
         cost += ca.mtimes([terminal_state_error, self.P, terminal_state_error.T])
@@ -187,10 +247,28 @@ class MPCWholeBody:
         # terminal state obstacle on ground
         for g in self.obsAvoid(self.obstacle_list, self.X[self.N,:]):
                 self.opti.subject_to(g <= self.s[self.N])
+        
+
+        # terminal state obstacles 3D 
+        pose_endpoint_terminal, x_joint_2_terminal, x_joint_3_terminal = \
+        self.robot_model.forward_tranformation(self.X[self.N, :])
+        x_endpoint_terminal = pose_endpoint_terminal[0:3]
+
+        self.manipulator_positions = [x_joint_2_terminal / 2, x_joint_2_terminal,
+                          (x_joint_2_terminal + x_joint_3_terminal) / 2, x_joint_3_terminal,
+                          (x_joint_3_terminal + x_endpoint_terminal) / 2, x_endpoint_terminal]
+
+        self.self_colli_check = [ca.horzcat(0, 0, 0), x_joint_2_terminal / 2, x_joint_2_terminal,
+                                 (x_joint_2_terminal + x_joint_3_terminal) / 2]
+        for i in range(len(self.self_colli_check)):
+            dist = self.self_colli_check[i] - self.manipulator_positions[-1]
+            self.opti.subject_to(self.endpoint_self_collision_radius - ca.norm_2(dist) < self.s[k])
+
+        if len(self.obstacle_manipulation_list) > 0:
+            self.obsAvoidConvex(self.N)
+
         cost += ca.mtimes([self.s[self.N], self.S, self.s[self.N]])
 
-        # terminal state onstacles 3D 
-        # TODO
         
         # debug
         self.cost = cost 

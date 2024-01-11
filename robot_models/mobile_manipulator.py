@@ -11,7 +11,7 @@ class MobileManipulator:
         self.dt = dt
         self.base = Base(dt)
         self.manipulator = ManipulatorPanda3DoF(dt)
-        self.baselink2joint1_x = 0 # 0.007
+        self.baselink2joint1_x = -0.007 # 0.007 #TODO: why it can work? it's an error!
         self.baselink2joint1_z = 0.606 + 0.333
 
     def forward_tranformation(self, state):
@@ -38,6 +38,18 @@ class MobileManipulator:
             x[1] + (pos_endpoint[0] + self.baselink2joint1_x) * ca.sin(x[2]),
             0 + pos_endpoint[2] + self.baselink2joint1_z,
             x[2]
+        )
+
+        pos_joint_2 = ca.horzcat(
+            x[0] + (pos_joint_2[0] + self.baselink2joint1_x) * ca.cos(x[2]),
+            x[1] + (pos_joint_2[0] + self.baselink2joint1_x) * ca.sin(x[2]),
+            0 + pos_joint_2[2] + self.baselink2joint1_z
+        )
+
+        pos_joint_3 = ca.horzcat(
+            x[0] + (pos_joint_3[0] + self.baselink2joint1_x) * ca.cos(x[2]),
+            x[1] + (pos_joint_3[0] + self.baselink2joint1_x) * ca.sin(x[2]),
+            0 + pos_joint_3[2] + self.baselink2joint1_z
         )
 
         return pose_endpoint, pos_joint_2, pos_joint_3
