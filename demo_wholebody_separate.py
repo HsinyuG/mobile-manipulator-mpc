@@ -19,6 +19,9 @@ t_manipulate = 2
 base_x_start = np.array([0., 0., ca.pi/4, 0., 0., 0.])  # ca.pi/4
 joint_x_start = np.array([0, -3, 0]) # 0 0 0
 global_pose_target = np.array([5.4243, 5.4243, 0.606+0.333+0.5, ca.pi/4])
+obstacle_surfaces_manipulation = [np.array([[0, 0, -1]]), np.array([[1, 0, 0]])]
+obstacle_point_manipulation = np.array([[0.3, 0, 0.3]])  # position of the obstacle periphery
+# obstacle_point_manipulation = np.array([[]])
 
 obstacle_list = [
     Obstacles(2.5, 3.0, 0.6),
@@ -29,9 +32,11 @@ obstacle_list = [
 robot_base = Base(dt)
 controller_base = MPCBase(robot_base, obstacle_list, N=N)
 robot_manipulator = ManipulatorPanda3DoF(dt)
-controller_manipulator = MPCManipulator3DoF(robot_manipulator, N=N)
+controller_manipulator = MPCManipulator3DoF(robot_manipulator, obstacle_surfaces_manipulation,
+                                            obstacle_point_manipulation, N=N)
 
-world = Interface(dt, t_move, t_manipulate, base_x_start, joint_x_start, global_pose_target, controller_base, controller_manipulator, physical_sim=True)
+world = Interface(dt, t_move, t_manipulate, base_x_start, joint_x_start, global_pose_target, controller_base,
+                  controller_manipulator, obstacle_point_manipulation, physical_sim=True)
 
 world.run()
 world.plot3D()

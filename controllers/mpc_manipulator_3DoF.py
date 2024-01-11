@@ -7,12 +7,14 @@ WEIGHT = 1e6
 class MPCManipulator3DoF:
     def __init__(self,
         robot,
+        obstacle_surfaces_manipulation,
+        obstacle_point_manipulation,
         N = 10,
         Q = np.diag([1, 1., 1]),  # q1 q2 q3
         P = np.diag([1, 1., 1]),
         R = np.diag([0.1, 0.1, 0.1]), # dq1 dq2 dq3 # 5e-8 both slow and jitter, 0 jitter
         M = np.diag([1e-2, 1e-2, 1e-2]), # ddq1, ddq2, ddq3
-        qlim=(ca.horzcat(-ca.pi/2, -ca.pi*3/4, 0), ca.horzcat(ca.pi/2, 0, ca.pi)),  # TODO: check the boundary
+        qlim=(ca.horzcat(-ca.pi/2, -ca.pi, 0), ca.horzcat(ca.pi/2, 0, ca.pi)),  # TODO: check the boundary
         dqlim=(ca.horzcat(-1, -1, -1), ca.horzcat(1, 1, 1)),
         ddqlim=(ca.horzcat(-0.5, -0.5, -0.5), ca.horzcat(0.5, 0.5, 0.5))):
 
@@ -30,8 +32,8 @@ class MPCManipulator3DoF:
         self.robot_model = robot
         self.is_cartesian_ref = False # TODO: use as parameter, when true the reference is given in cartesian space
 
-        self.normals = [np.array([[0, 0, -1]]), np.array([[1, 0, 0]])]
-        self.obstacle_point = np.array([[0.25, 0, 0.3]])
+        self.normals = obstacle_surfaces_manipulation
+        self.obstacle_point = obstacle_point_manipulation
 
         self.reset()
 
@@ -81,8 +83,14 @@ class MPCManipulator3DoF:
             self.positions = [x_joint_2 / 2, x_joint_2, (x_joint_2 + x_joint_3) / 2, x_joint_3,
                               (x_joint_3 + x_endpoint) / 2, x_endpoint]
 
-            self.obstacle_avoidance_constraints_convex()
-            cost += self.slack ** 2 * WEIGHT
+            self.self_colli_check = [ca.horzcat(0, 0, 0), x_joint_2 / 2, x_joint_2, (x_joint_2 + x_joint_3) / 2]
+            for i in range(len(self.self_colli_check)):
+                dis = self.self_colli_check[i] - self.positions[-1]
+                self.opti.subject_to(ca.sqrt(dis[0]**2 + dis[1]**2 + dis[2]**2) > 0.05)
+
+            if self.obstacle_point.size > 0:
+                self.obstacle_avoidance_constraints_convex()
+                cost += self.slack ** 2 * WEIGHT
 
         x_endpoint_terminal, x_joint_2_terminal, x_joint_3_terminal = self.robot_model.forward_tranformation(
             self.X[self.N, :])
@@ -95,8 +103,16 @@ class MPCManipulator3DoF:
         self.positions = [x_joint_2_terminal / 2, x_joint_2_terminal,
                           (x_joint_2_terminal + x_joint_3_terminal) / 2, x_joint_3_terminal,
                           (x_joint_3_terminal + x_endpoint_terminal) / 2, x_endpoint_terminal]
-        self.obstacle_avoidance_constraints_convex()
-        cost += self.slack ** 2 * WEIGHT
+
+        self.self_colli_check = [ca.horzcat(0, 0, 0), x_joint_2_terminal / 2, x_joint_2_terminal,
+                                 (x_joint_2_terminal + x_joint_3_terminal) / 2]
+        for i in range(len(self.self_colli_check)):
+            dis = self.self_colli_check[i] - self.positions[-1]
+            self.opti.subject_to(ca.sqrt(dis[0] ** 2 + dis[1] ** 2 + dis[2] ** 2) > 0.05)
+
+        if self.obstacle_point.size > 0:
+            self.obstacle_avoidance_constraints_convex()
+            cost += self.slack ** 2 * WEIGHT
 
         self.opti.minimize(cost)
 

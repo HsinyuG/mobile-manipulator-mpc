@@ -11,7 +11,8 @@ import copy
 import simulation.albert_robot as sim
 
 class Interface:
-    def __init__(self, dt, t_move, t_manipulate, base_x_start, joint_x_start, global_pose_target, controller_base, controller_manipulator, physical_sim=False):
+    def __init__(self, dt, t_move, t_manipulate, base_x_start, joint_x_start, global_pose_target, controller_base,
+                 controller_manipulator, obstacle_point_manipulation, physical_sim=False):
         '''
         TODO:
         1. assign values
@@ -33,6 +34,7 @@ class Interface:
         self.joint_x_start = joint_x_start
         self.controllers_list = [controller_base, controller_manipulator]
         self.controller = controller_base
+        self.obstacle_point_manipulation = obstacle_point_manipulation.squeeze()
         self.physical_sim = physical_sim
 
         self.manipulator_pose_log = []
@@ -142,7 +144,14 @@ class Interface:
             self.globalPlanManipulator()
             self.task_flag = 'manipulate'
             self.mpc_step_counter = 0
+
+            self.endpoint_pos = []
+
         if self.task_flag == 'manipulate':
+            self.endpoint_pos.append(self.current_joints_pose[:3])
+            # print("current position and goal position: ",
+            #       self.current_joints_pose[:3],
+            #       self.pose_target, "\n", self.endpoint_pos)
             self.checkFinishManipulator()
         if self.task_flag == 'manipulate finish':
             self.is_active = False
@@ -518,7 +527,7 @@ class Interface:
         plt.legend()
         plt.grid()
 
-        plt.show(block=True)
+        plt.show(block=False)
 
 
     def plot2D(self):
@@ -597,6 +606,44 @@ class Interface:
         plt.show(block=False)
 
 
+    def plot_endpoint(self):
+        # Extracting the x and z coordinates for plotting (assuming y is constant)
+        x_coords = [pos[0] for pos in self.endpoint_pos]
+        z_coords = [pos[2] for pos in self.endpoint_pos]
+
+        # Plotting the updated trajectory and the obstacle
+        plt.figure(figsize=(10, 10))
+        plt.plot(x_coords, z_coords, marker='o', color='blue', linewidth=2,
+                 label='Endpoint Trajectory')  # Thicker trajectory
+        plt.scatter(self.pose_target[0], self.pose_target[2], color='red', marker='^', s=100,
+                    label='Target')  # More visible target color
+
+        if self.obstacle_point_manipulation.size > 0:
+            obstacle_point = self.obstacle_point_manipulation + np.array([0.03, 0, - 0.03])
+            obstacle_size = 0.3
+
+            # Creating the corners of the obstacle box
+            obstacle_corners = [
+                obstacle_point,
+                obstacle_point + np.array([obstacle_size, 0, 0]),
+                obstacle_point + np.array([obstacle_size, 0, - obstacle_size]),
+                obstacle_point + np.array([0, 0, - obstacle_size]),
+                obstacle_point  # to close the rectangle
+            ]
+
+            # Extracting x and z coordinates of the obstacle
+            obstacle_x = [corner[0] for corner in obstacle_corners]
+            obstacle_z = [corner[2] for corner in obstacle_corners]
+            plt.fill(obstacle_x, obstacle_z, color='gray', alpha=0.5, label='Obstacle')  # Obstacle representation
+
+        plt.title('2D Trajectory with Obstacle and Pose Target')
+        plt.xlabel('X Coordinate')
+        plt.ylabel('Z Coordinate')
+        plt.axis('equal')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
     def plot3D(self):
         self.plot2D()
         self.plotManipulator()
+        self.plot_endpoint()
