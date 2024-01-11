@@ -663,8 +663,9 @@ class Interface:
         # task specific code
         self.obstacle_point_manipulation = np.array([0.4, 0, 0.3])
         if self.obstacle_point_manipulation.size > 0:
+            ## obstacle at the end
             obstacle_point = self.obstacle_point_manipulation + np.array([0.03, 0, - 0.03])
-            obstacle_size = 0.3
+            obstacle_size = 0.5
 
             # Creating the corners of the obstacle box
             obstacle_corners = [
@@ -680,12 +681,32 @@ class Interface:
             obstacle_z = [corner[2] for corner in obstacle_corners]
             plt.fill(obstacle_x, obstacle_z, color='gray', alpha=0.5, label='Obstacle')  # Obstacle representation
 
+            ## obstacle on the way
+            obstacle_point = np.array([0, 0, 0.35])
+            obstacle_size = 1
+
+            # Creating the corners of the obstacle box
+            obstacle_corners = [
+                obstacle_point,
+                obstacle_point + np.array([- obstacle_size/np.sqrt(2), 0, obstacle_size/np.sqrt(2)]),
+                obstacle_point + np.array([0, 0, np.sqrt(2) * obstacle_size]),
+                obstacle_point + np.array([obstacle_size/np.sqrt(2), 0, obstacle_size/np.sqrt(2)]),    
+                obstacle_point  # to close the rectangle
+            ]
+
+            # Extracting x and z coordinates of the obstacle
+            obstacle_x = [corner[0] for corner in obstacle_corners]
+            obstacle_z = [corner[2] for corner in obstacle_corners]
+            plt.fill(obstacle_x, obstacle_z, color='gray', alpha=0.5, label='Obstacle')  # Obstacle representation
+
+        plt.axis([-0.9, 0.75, 0, 0.9])
         plt.title('2D Trajectory with Obstacle and Pose Target')
         plt.xlabel('X Coordinate')
         plt.ylabel('Z Coordinate')
-        plt.axis('equal')
+        # plt.axis('equal')
         plt.legend()
         plt.grid(True)
+        
         plt.show(block=True)
 
 
