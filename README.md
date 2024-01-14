@@ -1,1 +1,90 @@
-# mobile-manipulator-PDM
+# RO4705 Planning and Decision Making
+Group 34: Xinyu Gao (5919320), Weilin Xia (5995426), Pengzhi Yang (5694663), Jade Leurs (4964063), Jan 14, 2024
+Project github URL: https://github.com/HsinyuG/mobile-manipulator-mpc     
+## 1. Task Description
+- Autonomously navigate a mobile manipulator towards a designated target, specifically to press a button
+- Avoid both static and dynamic obstacles in the environment
+
+
+## 2. Code Structure
+    mobile-manipulator-mpc/
+    ├── controllers/
+    |         └── mpc_wholebody-qref.py  
+    |                       └── Class MPCWholeBody
+    |                                   ├── reset(...)
+    |                                   ├── solve(...)
+    |                                   └── ...
+    ├── robot_models/
+    |       ├── base.py
+    |       |     └── Class Base 
+    |       |             └── f_kinematics(...)  
+    |       ├── manipulator_3DoF.py
+    |       |           └──class ManipulatorPanda3DoF
+    |       |                           ├── forward_tranformation(...)
+    |       |                           └── inverse_transformation(...)
+    |       ├── mobile_manipulator.py
+    |       |           └──class MobileManipulator
+    |       |                       ├── forward_tranformation(...)
+    |       |                       └── f_kinematics(...)
+    |       └── obstacles.py
+    |               └── class Obstacles
+    ├── simulation/
+    |       ├── albert_robot.py
+    |       |        └── ...   
+    |       ├── obstacles.py 
+    |       |        └── ...
+    |       └── run_simulation.py 
+    |                   └── ...
+    ├── interface_wholebody_qref.py                   # Interface with simulation
+    |             └── class Interface
+    |                      ├── pseudoTimer(...) 
+    |                      ├── observationCallback(...) 
+    |                      ├── actuate(...)
+    |                      ├── stateMachineUpdate(...)  
+    |                      ├── timerCallback(...)
+    |                      └── ...                 
+    ├── demo_wholebody_qref.py                        # Main file to run the static obstacle scenario
+    └── demo_wholebody_separate.py                    # Main file to run the dynamic obstacle scenario
+
+## 3. Code Pointers
+`controllers/mpc_wholebody_qref.py`:
+This script implements MPC for the wholebody (mobile base + manipulator).
+- `reset(self)`: set up the optimization variables, cost functions and constraints for the mobile manipulator
+- `solve(self, x_init, traj_ref, u_ref)`: initialize and solve the optimization problem, handling potential errors and updating the initial guess for the next optimization iteration.
+  
+`interface_wholebody_qref.py`:
+This script orchestrates the operation of the mobile manipulator, managing the simulation process and handoffing the control using a state machine. 
+- `timerCallback(self)`: The main function in this script and the operational flow proceeds as follows:
+  - add a synchronized timer with the simulation, managing the timing of simulation steps and MPC updates.
+  - call observationCallback to get current state
+  - calculate local reference trajectory
+  - manage the state machine of the mobile maniulator, updating task flags based on current states and objectives, and check for task completion.
+  - solve the mpc problem
+  - apply commands to simulation, get observation
+  
+`demo_wholebody_qref.py`:
+This script is the main file to run the project.
+### 4. Run
+####  experiment scenario of static obstacles
+- `git checkout wholebody-qref` 
+<!-- - `cd` to the directory of file: `mobile-manipulator-mpc/demo_wholebody_qref.py` -->
+- select an experiment_scenario by changing the parameter `experiment_scenario` 
+  - 0: for debug
+  - 1: for obstacle avoidance during arm manipulating (avoid the corner of the table)
+  - 2: for obstacle avoidance during base movement (avoid static obstacles both on the ground and in aerial spaces)
+- run script `demo_wholebody_qref.py`
+####  experiment scenario of dynamic obstacles  
+- `git checkout moving_obs` 
+<!-- - `cd` to the directory of file: `mobile-manipulator-mpc/demo_wholebody_separate.py` -->
+- run script `demo_wholebody_separate.py`
+### 5. Experimental Results
+<div style="display:flex;justify-content: center;">
+  <img src="./imgs/press_button.gif" width="60%">
+</div>
+<div style="display:flex;justify-content: center;">
+  <img src="./imgs/aerial_obs.gif" width="60%">
+</div>
+<div style="display:flex;justify-content: center;">
+  <img src="./imgs/moving_obs.gif" width="60%">
+</div>
+
