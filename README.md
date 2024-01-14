@@ -1,9 +1,18 @@
-# RO4705 Planning and Decision Making
+# RO47005 Planning and Decision Making
 Group 34: Xinyu Gao (5919320), Weilin Xia (5995426), Pengzhi Yang (5694663), Jade Leurs (4964063), Jan 14, 2024
 Project github URL: https://github.com/HsinyuG/mobile-manipulator-mpc     
-## 1. Task Description
+## 0. Task Description
 - Autonomously navigate a mobile manipulator towards a designated target, specifically to press a button
 - Avoid both static and dynamic obstacles in the environment
+
+## 1. Installation
+```angular2html
+git clone https://github.com/HsinyuG/mobile-manipulator-mpc.git
+cd mobile-manipulator-mpc
+conda create -n mobile-manipulator python=3.9 -y
+conda activate mobile-manipulator
+pip install -r requirements.txt
+```
 
 
 ## 2. Code Structure
@@ -44,7 +53,7 @@ Project github URL: https://github.com/HsinyuG/mobile-manipulator-mpc
     |                      ├── timerCallback(...)
     |                      └── ...                 
     ├── demo_wholebody_qref.py                        # Main file to run the static obstacle scenario
-    └── demo_wholebody_separate.py                    # Main file to run the dynamic obstacle scenario
+    └── demo_wholebody_separate.py                    # Main file to run the dynamic obstacle scenario (it's in the 'moving_obs' branch)
 
 ## 3. Code Pointers
 `controllers/mpc_wholebody_qref.py`:
@@ -64,8 +73,8 @@ This script orchestrates the operation of the mobile manipulator, managing the s
   
 `demo_wholebody_qref.py`:
 This script is the main file to run the project.
-### 4. Run
-####  experiment scenario of static obstacles
+## 4. Run
+###  experiment scenario of static obstacles
 - `git checkout wholebody-qref` 
 <!-- - `cd` to the directory of file: `mobile-manipulator-mpc/demo_wholebody_qref.py` -->
 - select an experiment_scenario by changing the parameter `experiment_scenario` 
@@ -73,11 +82,11 @@ This script is the main file to run the project.
   - 1: for obstacle avoidance during arm manipulating (avoid the corner of the table)
   - 2: for obstacle avoidance during base movement (avoid static obstacles both on the ground and in aerial spaces)
 - run script `demo_wholebody_qref.py`
-####  experiment scenario of dynamic obstacles  
+###  experiment scenario of dynamic obstacles  
 - `git checkout moving_obs` 
 <!-- - `cd` to the directory of file: `mobile-manipulator-mpc/demo_wholebody_separate.py` -->
 - run script `demo_wholebody_separate.py`
-### 5. Experimental Results
+## 5. Experimental Results
 <div style="display:flex;justify-content: center;">
   <img src="./imgs/press_button.gif" width="60%">
 </div>
@@ -88,3 +97,18 @@ This script is the main file to run the project.
   <img src="./imgs/moving_obs.gif" width="60%">
 </div>
 
+[//]: # (## 6. Contact)
+
+[//]: # (Xinyu Gao - X.Gao-14@student.tudelft.nl)
+
+[//]: # (Weilin Xia - W.Xia-3@student.tudelft.nl)
+
+[//]: # (Pengzhi Yang - P.Yang-4@student.tudelft.nl)
+
+[//]: # (Jade Leurs - J.Y.M.Leurs@student.tudelft.nl)
+
+## 6. Contact
+- Xinyu Gao - [X.Gao-14@student.tudelft.nl](mailto:X.Gao-14@student.tudelft.nl)
+- Weilin Xia - [W.Xia-3@student.tudelft.nl](mailto:W.Xia-3@student.tudelft.nl)
+- Pengzhi Yang - [P.Yang-4@student.tudelft.nl](mailto:P.Yang-4@student.tudelft.nl)
+- Jade Leurs - [J.Y.M.Leurs@student.tudelft.nl](mailto:J.Y.M.Leurs@student.tudelft.nl)
