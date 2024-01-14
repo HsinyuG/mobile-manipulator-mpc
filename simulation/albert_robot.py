@@ -9,7 +9,7 @@ from simulation.obstacles import (
     movable_box1,
     static_cylinder,
     static_cylinder_2,
-    static_cylinder_3,
+    movable_cylinder_3,
     static_cylinder_4,
     static_cylinder_5
 )
@@ -50,12 +50,12 @@ def setup_environment(
         # env.add_obstacle(static_box1)
         # env.add_obstacle(movable_box1)
         env.add_obstacle(static_cylinder_2)
-        env.add_obstacle(static_cylinder_3)
+        env.add_obstacle(movable_cylinder_3)
         # env.add_obstacle(static_cylinder_4)
         env.add_obstacle(static_cylinder_5)
 
     if reconfigure_camera:
-        env.reconfigure_camera(4.0, 180.0, -90.01, (0, 0.0, 0)) # -90.00 not working!
+        env.reconfigure_camera(4.0, 180.0, -90.01, (2.5, 2.0, 0)) # -90.00 not working!
 
     return env, ob
 

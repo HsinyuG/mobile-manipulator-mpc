@@ -1,7 +1,7 @@
 from mpscenes.obstacles.sphere_obstacle import SphereObstacle
 from mpscenes.obstacles.box_obstacle import BoxObstacle
 from mpscenes.obstacles.cylinder_obstacle import CylinderObstacle
-
+from mpscenes.obstacles.dynamic_cylinder_obstacle import DynamicCylinderObstacle
 import os
 
 movable_sphere1_dict = {
@@ -47,6 +47,19 @@ static_cylinder_dict_3 = {
     "rgba": [0.1, 0.3, 0.3, 1.0],
 }
 static_cylinder_3 = CylinderObstacle(name="cylinder_obstacle", content_dict=static_cylinder_dict_3)
+
+movable_cylinder_dict_3 = {
+    "type": "cylinder",
+    "movable": False,
+    "geometry": {
+        "trajectory": ["2.5 - 0.5 * t", "1.0", "0.1"],  # [3.0, -2.5, 0.0],
+        "radius": 0.6,
+        "height": 0.5,
+    },
+    # "dynamic": True,
+    "rgba": [0.1, 0.3, 0.3, 1.0],
+}
+movable_cylinder_3 = DynamicCylinderObstacle(name="cylinder_obstacle", content_dict=movable_cylinder_dict_3)
 
 static_cylinder_dict_4 = {
     "type": "cylinder",

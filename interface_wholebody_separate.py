@@ -58,7 +58,7 @@ class Interface:
             self.idx_base = np.array([0,1,2])
             init_state[self.idx_base] = self.x_start[:len(self.idx_base)]
             init_state[self.idx_3dof] = self.x_start[-len(self.idx_3dof):]
-            self.env, self.ob = sim.setup_environment(render=True, reconfigure_camera=False, obstacles=True, mode='vel',\
+            self.env, self.ob = sim.setup_environment(render=True, reconfigure_camera=True, obstacles=True, mode='vel',\
                 initial_state=init_state, dt=self.sim_dt)
 
             self.vel_command_base = np.zeros(2) # V and omega, integrated by dV and dw command and used by simulation
@@ -147,6 +147,9 @@ class Interface:
 
             self.endpoint_pos = []
 
+            self.plot2D()
+            self.plot_endpoint()
+
         if self.task_flag == 'manipulate':
             self.endpoint_pos.append(self.current_joints_pose[:3])
             # print("current position and goal position: ",
@@ -172,6 +175,7 @@ class Interface:
         elif self.task_flag == 'manipulate':
             self.calcLocalRefTraj([0,1,2]) # manipulator
 
+        print("solve!!!!", self.mpc_step_counter)
         # step 4
         self.command = self.controller.solve(self.current_state, self.local_traj_ref, self.local_u_ref)
         if self.task_flag == 'manipulate':
@@ -592,16 +596,27 @@ class Interface:
 
         # obs
         plt.figure()
-        plt.plot(self.base_x_log[:, 0], self.base_x_log[:, 1], label = 'actual postion')
+
+        # Mark the starting point at [0, 0]
+        plt.scatter(0, 0, color='red', s=70, label='Starting Point')
+
+        # Annotate the end point of the executed trajectory
+        executed_end_point = self.base_x_log[-1, :2]
+        plt.scatter(executed_end_point[0], executed_end_point[1], marker='p', color='gold', s=120, label='End Point')
+        # plt.annotate('', (executed_end_point[0], executed_end_point[1]), textcoords="offset points",
+        #              xytext=(10, -10), ha='center')
+
+        plt.plot(self.base_x_log[:, 0], self.base_x_log[:, 1], linewidth=3, label = 'Executed Trajectory')
         ref_line = np.linspace(self.base_x_log[0, :2], self.base_x_log[-1, :2])
-        plt.plot(ref_line[:, 0], ref_line[:, 1], label = 'reference position')
+        plt.plot(ref_line[:, 0], ref_line[:, 1], linewidth=3, label = 'Reference Waypoints')
         for obs in self.controllers_list[0].obstacle_list:
-            circle = plt.Circle((obs.x, obs.y), obs.radius, color='green', fill=False)
+            circle = plt.Circle((obs.x, obs.y), obs.radius, linewidth=3, color='green', fill=False)
             plt.gca().add_artist(circle)
             plt.gca().set_aspect('equal', adjustable='box')
-        plt.xlabel('x')
-        plt.ylabel('y')
-        plt.legend()
+        plt.xlabel('x', fontsize=18)
+        plt.ylabel('y', fontsize=18)
+        plt.tick_params(axis='both', which='major', labelsize=14)
+        # plt.legend(fontsize=16)
         plt.grid()
         plt.show(block=False)
 

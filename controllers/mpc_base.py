@@ -5,12 +5,12 @@ import math
 
 class MPCBase:
     def __init__(self,
-        robot, 
+        robot,
         obstacle_list,
-        N = 10, 
+        N = 10,
         Q = np.diag([5., 5., 0.0, 0, 0, 1.]), # x y psi dx dy dpsi
         P = np.diag([5., 5., 0.0, 0, 0, 1.]),  # [2., 2., 0., 0, 0, 1.]
-        R = np.diag([1., 1.]), 
+        R = np.diag([1., 1.]),
         M = np.diag([1e5]), # 1e3, th=0.0, r=0.4
         ulim=np.array([[-2, -ca.pi],[2, ca.pi]]), # dv, dw
         xlim=np.array([[-100, -100, -2, -2, -ca.pi],[100, 100, 2, 2, ca.pi]]) # x, y, _, dx, dy, dpsi
@@ -44,15 +44,26 @@ class MPCBase:
             sum_slack_var += - dist_to_obs + expand_dist
         return sum_slack_var
         #R_base+R_obstacle-|postion_base-postion_obstacle|<=0
-        # return (x[0]-obstacle.x)**2 + (x[1]-obstacle.x)**2 - obstacle.radius - self.base_radius() 
+        # return (x[0]-obstacle.x)**2 + (x[1]-obstacle.x)**2 - obstacle.radius - self.base_radius()
 
-    def obsAvoid(self, obstacle_list, x):
+    def obsAvoid(self, obstacle_list, x, k):
         g = []
         threshold = 0.0 # 0.5 is safe, -0.1 is elegant
-        for obs in obstacle_list:
-            g.append((obs.radius + self.base_radius()) - ca.sqrt((x[0]-obs.x)**2 + (x[1]-obs.y)**2) + threshold) # should be <= 0
+        for idx, obs in enumerate(obstacle_list):
+            if idx == 1:  # Check if it's the first obstacle
+                # For the first obstacle, update x-coordinate dynamically
+                # self.obs_x = obs.x
+                # self.k = k
+                # self.moved = self.dt * 0.5 * k
+                self.dynamic_x = self.obstacle_x - self.dt * 0.5 * k
+                g.append((obs.radius + self.base_radius()) - ca.sqrt(
+                    (x[0] - self.dynamic_x) ** 2 + (x[1] - obs.y) ** 2) + threshold)
+            else:
+                # For other obstacles, use the static position
+                g.append(
+                    (obs.radius + self.base_radius()) - ca.sqrt((x[0] - obs.x) ** 2 + (x[1] - obs.y) ** 2) + threshold)
         return g # all elements should be <= 0
-    
+
     def angleDiff(self, a, b):
         """
         input angle from any range, output a-b converted to [-pi, pi)
@@ -62,7 +73,7 @@ class MPCBase:
         b = ca.fmod((b + ca.pi), (2*ca.pi)) - ca.pi
 
         # try:
-        #     if a * b >= 0: # both [-pi, 0] or [0, pi) 
+        #     if a * b >= 0: # both [-pi, 0] or [0, pi)
         #         angle_diff = a - b
         #     elif a > b: # a (0, pi), b [-pi, 0)
         #         angle_diff = a - b if a - b <= ca.pi else a - b - 2*ca.pi
@@ -72,20 +83,20 @@ class MPCBase:
         # except:
         #     angle_diff = a - b
         #     print("angle diff not working because of casadi")
-        
+
         angle_diff = ca.if_else(
-            a * b >= 0, 
-            a - b, 
+            a * b >= 0,
+            a - b,
             ca.if_else(
-                a > b, 
+                a > b,
                 ca.if_else(
-                    a - b <= ca.pi, 
-                    a - b, 
+                    a - b <= ca.pi,
+                    a - b,
                     a - b - 2 * ca.pi
-                ), 
+                ),
                 ca.if_else(
-                    a - b > -ca.pi, 
-                    a - b, 
+                    a - b > -ca.pi,
+                    a - b,
                     a - b + 2 * ca.pi
                 )
             )
@@ -94,18 +105,18 @@ class MPCBase:
         return angle_diff
 
     def setWeight(self, Q=None, R=None, P=None, M=None):
-        if Q is not None: 
+        if Q is not None:
             self.Q_value = Q
-            
-        if R is not None: 
+
+        if R is not None:
             self.R_value = R
-            
-        if P is not None: 
+
+        if P is not None:
             self.P_value = P
-            
-        if M is not None: 
+
+        if M is not None:
             self.M_value = M
-            
+
         self.opti.set_value(self.Q, self.Q_value)
         self.opti.set_value(self.R, self.R_value)
         self.opti.set_value(self.P, self.P_value)
@@ -121,6 +132,9 @@ class MPCBase:
         if we use Nx2, then matrix mult = X @ p; and elementwise mult = X * p, 
         of we use 2xN, then matrix mult = (X.T @ p).T; and elementwise mult = (X.T * p).T
         '''
+        self.obstacle_x = self.opti.parameter(1)
+        self.opti.set_value(self.obstacle_x, 2.5)
+
         self.X = self.opti.variable(self.N+1, 6)    # states
         self.U = self.opti.variable(self.N, 2)      # inputs
         self.s = self.opti.variable(self.N+1, 1)    # slack variable
@@ -154,11 +168,11 @@ class MPCBase:
             self.opti.subject_to(self.opti.bounded(self.ulim[0].reshape(1,2), self.U[k, :], self.ulim[1].reshape(1,2))) # control input constraint
             self.opti.subject_to(self.opti.bounded(self.xlim[0, 0:2].reshape(1,2), self.X[k, 0:2], self.xlim[1, 0:2].reshape(1,2))) # state constraint
             self.opti.subject_to(self.opti.bounded(self.xlim[0, 2:].reshape(1,-1), self.X[k, 3:], self.xlim[1, 2:].reshape(1,-1))) # state constraint
-            for g in self.obsAvoid(self.obstacle_list, self.X[k,:]):
+            for g in self.obsAvoid(self.obstacle_list, self.X[k,:], k):
                 self.opti.subject_to(g <= self.s[k])
             # constraint_error = self.slackObsAvoid(self.obstacle_list, self.X[k, :])
             cost += ca.mtimes([self.s[k], self.M, self.s[k]])
-            
+
         terminal_state_error = ca.horzcat(
                 self.X[self.N, :2] - self.X_ref[self.N, :2],
                 self.angleDiff(self.X[self.N, 2], self.X_ref[self.N, 2]),
@@ -169,16 +183,16 @@ class MPCBase:
         self.opti.subject_to(self.X[0, :] == self.X_init)# Initial state as constraints
         self.opti.subject_to(self.opti.bounded(self.xlim[0, 0:2].reshape(1,2), self.X[self.N, 0:2], self.xlim[1, 0:2].reshape(1,2))) # state constraint
         self.opti.subject_to(self.opti.bounded(self.xlim[0, 2:].reshape(1,-1), self.X[self.N, 3:], self.xlim[1, 2:].reshape(1,-1))) # state constraint
-        for g in self.obsAvoid(self.obstacle_list, self.X[self.N,:]):
+        for g in self.obsAvoid(self.obstacle_list, self.X[self.N,:], k+1):
                 self.opti.subject_to(g <= self.s[self.N])
         # self.opti.subject_to(self.obsAvoid(self.obstacle_list, self.X[self.N,:]) <= self.s[self.N])
         # terminal_constraint_error = self.slackObsAvoid(self.obstacle_list, self.X[self.N, :])
         cost += ca.mtimes([self.s[self.N], self.M, self.s[self.N]])
-        
+
         self.opti.minimize(cost)
 
-        
-        
+
+
         # Set solver options
         # opts = {'ipopt.print_level': 0, 'print_time': 0, 'ipopt.tol': 1e-3}
         opts_setting = {'ipopt.max_iter':2000,
@@ -189,21 +203,20 @@ class MPCBase:
         self.opti.solver('ipopt', opts_setting)
 
     def solve(self, x_init, traj_ref, u_ref):
-
         # Set initial guess for the optimization problem
         if self.X_guess is None:
             self.X_guess = np.ones((self.N+1, 6)) * x_init
 
         if self.U_guess is None:
             self.U_guess = np.zeros((self.N, 2))
-        
+
         self.opti.set_initial(self.X, self.X_guess)
         self.opti.set_initial(self.U, self.U_guess)
         self.opti.set_initial(self.s, np.zeros((self.N+1, 1)))
 
         self.opti.set_value(self.X_ref, traj_ref)
         self.opti.set_value(self.U_ref, u_ref)
-        
+
         self.opti.set_value(self.X_init, x_init)
 
         try:
@@ -213,17 +226,29 @@ class MPCBase:
             print("here should be a debug breakpoint")
             x = self.opti.debug.value(self.X)
             for x_k in x:
-                print(self.obsAvoid(self.obstacle_list, x_k))
+                print(self.obsAvoid(self.obstacle_list, x_k, 0))
             print("x:", self.opti.debug.value(self.X))
             print("y:", self.opti.debug.value(self.U))
             print("s:", self.opti.debug.value(self.s))
-        
+
         ## obtain the initial guess of solutions of the next optimization problem
         self.X_guess = sol.value(self.X)
-        self.U_guess = sol.value(self.U) 
-        if self.U_guess.ndim == 1: 
+        self.U_guess = sol.value(self.U)
+        if self.U_guess.ndim == 1:
             self.U_guess = self.U_guess.reshape(-1,2)
+
+        moving_obs_x = self.update_obstacle_positions()
+        self.opti.set_value(self.obstacle_x, moving_obs_x)
+
         return self.U_guess[0, :]
-        
+
+    def update_obstacle_positions(self):
+        """
+        Update the positions of all moving obstacles based on the current simulation time.
+        """
+        obs = self.obstacle_list[1]
+        obs.x += - 0.5 * self.dt
+
+        return obs.x
 
 
