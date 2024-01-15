@@ -76,7 +76,6 @@ This script orchestrates the operation of the mobile manipulator, managing the s
 This script is the main file to run the project.
 ## 4. Run
 ###  experiment scenario of static obstacles
-- `git checkout wholebody-qref` 
 <!-- - `cd` to the directory of file: `mobile-manipulator-mpc/demo_wholebody_qref.py` -->
 - select an experiment_scenario by changing the parameter `experiment_scenario` 
   - 0: for debug
