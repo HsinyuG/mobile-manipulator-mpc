@@ -148,7 +148,8 @@ class Interface:
             self.endpoint_pos = []
 
             self.plot2D()
-            self.plot_endpoint()
+            # self.plot_endpoint()
+
 
         if self.task_flag == 'manipulate':
             self.endpoint_pos.append(self.current_joints_pose[:3])
@@ -175,7 +176,7 @@ class Interface:
         elif self.task_flag == 'manipulate':
             self.calcLocalRefTraj([0,1,2]) # manipulator
 
-        print("solve!!!!", self.mpc_step_counter)
+        # print("solve!!!!", self.mpc_step_counter)
         # step 4
         self.command = self.controller.solve(self.current_state, self.local_traj_ref, self.local_u_ref)
         if self.task_flag == 'manipulate':
@@ -616,9 +617,9 @@ class Interface:
         plt.xlabel('x', fontsize=18)
         plt.ylabel('y', fontsize=18)
         plt.tick_params(axis='both', which='major', labelsize=14)
-        # plt.legend(fontsize=16)
+        plt.legend(fontsize=16)
         plt.grid()
-        plt.show(block=False)
+        plt.show(block=True)
 
 
     def plot_endpoint(self):
