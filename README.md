@@ -1,9 +1,9 @@
 # RO47005 Planning and Decision Making
-Group 34: Xinyu Gao (5919320), Weilin Xia (5995426), Pengzhi Yang (5694663), Jade Leurs (4964063), Jan 14, 2024
-Project github URL: https://github.com/HsinyuG/mobile-manipulator-mpc     
+Group 34: Xinyu Gao, Weilin Xia, Pengzhi Yang, Jade Leurs, Jan 14, 2024
+Project GitHub URL: https://github.com/HsinyuG/mobile-manipulator-mpc     
 ## 0. Task Description
-- Autonomously navigate a mobile manipulator towards a designated target, specifically to press a button
-- Avoid both static and dynamic obstacles in the environment
+- Autonomously navigate a mobile manipulator towards a designated target, specifically to push a button
+- Avoid both static (and dynamic) obstacles in the environment
 
 ## 1. Installation
 ```angular2html
@@ -13,6 +13,7 @@ conda create -n mobile-manipulator python=3.9 -y
 conda activate mobile-manipulator
 pip install -r requirements.txt
 ```
+Pybullet-based simulation environment [gym_envs_urdf](https://github.com/maxspahn/gym_envs_urdf) is used. Please install it before running the code.
 
 
 ## 2. Code Structure
@@ -80,7 +81,7 @@ This script is the main file to run the project.
 - select an experiment_scenario by changing the parameter `experiment_scenario` 
   - 0: for debug
   - 1: for obstacle avoidance during arm manipulating (avoid the corner of the table)
-  - 2: for obstacle avoidance during base movement (avoid static obstacles both on the ground and in aerial spaces)
+  - 2: for obstacle avoidance during base movement (avoid static obstacles both on the ground and above)
 - run script `demo_wholebody_qref.py`
 ###  experiment scenario of dynamic obstacles  
 - `git checkout moving_obs` 
